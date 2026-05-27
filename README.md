@@ -17,6 +17,15 @@ The project is designed for handwritten engineering and study notes where a page
 
 The output should be a clean Markdown note plus editable diagram source files, stored in a user-defined folder structure.
 
+## Working Directories
+
+The repository includes two working directories for local development and manual processing:
+
+- **`inputs/`** — drop notebook page photos here before processing. Supported formats: JPG, JPEG, PNG, HEIC. Images are not committed to version control.
+- **`outputs/`** — generated Markdown notes, diagram source files (`.puml`, `.drawio`), and companion assets are written here. Contents are not committed to version control.
+
+These directories are for local use only. In the full desktop application, the input source and output destination (Obsidian vault path) are configured through the Settings screen.
+
 ## Core Product Idea
 
 Input:
