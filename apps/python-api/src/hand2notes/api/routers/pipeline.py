@@ -86,6 +86,9 @@ async def start_processing(session_id: UUID) -> ProcessResponse:
             on_progress({"event": "run_failed", "error": str(exc)})
         except asyncio.CancelledError:
             on_progress({"event": "run_cancelled"})
+        except Exception as exc:  # never let the UI hang on an unexpected error
+            log.exception("Pipeline run crashed")
+            on_progress({"event": "run_failed", "error": f"{type(exc).__name__}: {exc}"})
         finally:
             _active_runs.pop(session_id, None)
             # Signal all progress WebSockets to close

@@ -25,7 +25,7 @@ class PipelineError(Exception):
 
 
 async def run_pipeline(
-    db: AsyncSession,
+    db: AsyncSession | None,
     session: Session,
     pages: list[Page],
     config: VaultConfig,
@@ -65,18 +65,27 @@ async def run_pipeline(
         _check_cancel()
         _emit({"event": "stage_started", "stage": stage.value})
 
-        run = await run_logger.start_run(db, session.id, stage)
+        # Run audit logging is persisted only when a DB session is supplied.
+        # Sessions/pages currently live in memory (DB wiring lands in Phase 5),
+        # so logging is skipped rather than crashing on a None session.
+        run_id = None
         try:
+            if db is not None:
+                run = await run_logger.start_run(db, session.id, stage)
+                run_id = run.id
             metrics = await stage_fn(session, pages, config)
-            await run_logger.complete_run(db, run.id, metrics)
+            if db is not None and run_id is not None:
+                await run_logger.complete_run(db, run_id, metrics)
             _emit({"event": "stage_completed", "stage": stage.value, "metrics": metrics})
         except asyncio.CancelledError:
-            await run_logger.cancel_run(db, run.id)
+            if db is not None and run_id is not None:
+                await run_logger.cancel_run(db, run_id)
             raise
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
             log.exception("Stage %s failed: %s", stage.value, error_msg)
-            await run_logger.fail_run(db, run.id, error_msg)
+            if db is not None and run_id is not None:
+                await run_logger.fail_run(db, run_id, error_msg)
             raise PipelineError(f"Stage {stage.value} failed: {error_msg}") from exc
 
     _emit({"event": "run_completed", "session_id": str(session.id)})
