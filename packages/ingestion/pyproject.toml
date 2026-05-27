@@ -1,12 +1,11 @@
 [project]
 name = "hand2notes-ingestion"
 version = "0.1.0"
-description = "Image import, ordering, format validation, and HEIC conversion"
+description = "Image import, ordering, and format validation"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7",
     "Pillow>=10.3",
-    "pillow-heif>=0.16",
     "hand2notes-core-models",
 ]
 

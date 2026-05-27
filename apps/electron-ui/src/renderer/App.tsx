@@ -10,10 +10,29 @@ export function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .health()
-      .then(() => setScreen('import'))
-      .catch(() => setScreen('error'));
+    let active = true;
+    const maxAttempts = 10;
+    const delayMs = 300;
+
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const checkBackend = async () => {
+      for (let attempt = 0; attempt < maxAttempts && active; attempt += 1) {
+        try {
+          await api.health();
+          if (active) setScreen('import');
+          return;
+        } catch {
+          await wait(delayMs);
+        }
+      }
+      if (active) setScreen('error');
+    };
+
+    checkBackend();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSessionCreated = (sessionId: string) => {

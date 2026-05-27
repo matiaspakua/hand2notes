@@ -1,6 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let pythonProc: ChildProcessWithoutNullStreams | null = null;
 let apiPort: number | null = null;
@@ -13,9 +16,8 @@ let mainWindow: BrowserWindow | null = null;
 function startBackend(): Promise<number> {
   return new Promise((resolve, reject) => {
     const repoRoot = path.resolve(app.getAppPath(), '..', '..');
-    const apiDir = path.join(repoRoot, 'apps', 'python-api');
-    pythonProc = spawn('uv', ['run', 'python', '-m', 'hand2notes.api'], {
-      cwd: apiDir,
+    pythonProc = spawn('uv', ['run', '--package', 'hand2notes-api', 'python', '-m', 'hand2notes.api'], {
+      cwd: repoRoot,
       env: process.env,
     });
 
@@ -40,7 +42,7 @@ async function createWindow(): Promise<void> {
     width: 1280,
     height: 860,
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'index.js'),
+      preload: path.join(__dirname, '..', 'preload', 'index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -69,6 +71,11 @@ app.whenReady().then(async () => {
     await startBackend();
   } catch (err) {
     console.error('Failed to start Python backend:', err);
+    await dialog.showErrorBox(
+      'Backend startup failed',
+      `Unable to start the Python backend. Check the terminal for details.\n\n${String(err)}`,
+    );
+    return;
   }
   await createWindow();
 
