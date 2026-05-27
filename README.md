@@ -319,7 +319,9 @@ This reduces hallucination risk and keeps diagram generation testable.
 
 ### Diagram understanding
 
-- Qwen2.5-VL via Ollama as the primary local diagram interpreter. [web:126][web:129]
+- Qwen2.5-VL as the primary local diagram interpreter. [web:126][web:129]
+- `llama.cpp` as the recommended production inference runtime for the diagram-interpreter VLM because it provides direct GGUF execution, multimodal support, quantization control, and lower-level performance tuning for local inference. [web:150][web:164]
+- Ollama as the fast prototyping and developer-convenience runtime for the same model family. [web:126]
 - Optional Docling VLM integration for figure classification and local picture description. [web:111][web:112]
 - Custom Python schema to represent nodes, edges, containers, and styling.
 
@@ -340,12 +342,13 @@ This reduces hallucination risk and keeps diagram generation testable.
 
 ### Local model runtime
 
-- Ollama as the default local runtime for the vision-language diagram model. [web:126]
+- `llama.cpp` as the recommended default production runtime for the vision-language diagram model. It supports multimodal inference and Qwen2.5-VL GGUF deployment, and is the preferred path when optimizing for lower overhead and tighter performance control. [web:150][web:164]
+- Ollama as the recommended prototyping and developer-experience runtime, useful for fast evaluation and simpler local setup. [web:126]
 - Hugging Face Transformers as an advanced path for direct Python inference and tighter pipeline control. [web:112]
 
 ### Recommended decision
 
-If only one local multimodal model is selected now, use **Qwen2.5-VL 7B through Ollama** as the primary diagram interpreter in the pipeline, with deterministic Python renderers for PlantUML, Mermaid, and `.drawio` generation. [web:126][web:129][web:135]
+If only one local multimodal model is selected now, use **Qwen2.5-VL 7B with `llama.cpp` as the primary production runtime** for the diagram interpreter in the pipeline, with deterministic Python renderers for PlantUML, Mermaid, and `.drawio` generation. Use Ollama only as the convenience path for prototyping and evaluation. [web:126][web:129][web:135][web:150][web:164]
 
 ## License Direction
 
