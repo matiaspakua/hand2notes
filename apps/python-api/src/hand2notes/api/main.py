@@ -46,12 +46,9 @@ def create_app() -> FastAPI:
 
 
 def _register_routers(app: FastAPI) -> None:
-    """Mount feature routers as they are implemented (sessions/pipeline/config in Phase 3+)."""
-    # from .routers import sessions, pipeline, config
-    # app.include_router(sessions.router, prefix=API_PREFIX)
-    # app.include_router(pipeline.router, prefix=API_PREFIX)
-    # app.include_router(config.router, prefix=API_PREFIX)
-    return None
+    from .routers import pipeline, sessions
+    app.include_router(sessions.router, prefix=API_PREFIX)
+    app.include_router(pipeline.router, prefix=API_PREFIX)
 
 
 app = create_app()

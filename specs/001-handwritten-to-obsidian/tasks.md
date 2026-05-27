@@ -62,31 +62,31 @@
 
 ### Implementation
 
-- [ ] T021 Implement image validation and format normalization in `packages/ingestion/src/hand2notes/ingestion/importer.py` — accept JPG, JPEG, PNG; validate file size (< 50 MB); record source_path, width_px, height_px on Page model
-- [ ] T022 [P] Create golden OCR fixture: add `input.jpg` (handwritten page with heading, paragraph, bullet list) and `expected-text.md` to `tests/golden/ocr/mixed-heading-list/`
-- [ ] T023 Implement deskew and perspective correction in `packages/preprocessing/src/hand2notes/preprocessing/deskew.py` — OpenCV Hough line detection, affine warp correction, output normalized image
-- [ ] T024 [P] Implement denoising, shadow reduction, and contrast normalization in `packages/preprocessing/src/hand2notes/preprocessing/denoise.py` — OpenCV adaptiveThreshold, scikit-image background removal
-- [ ] T025 Implement layout region detection in `packages/layout/src/hand2notes/layout/detector.py` — call Surya to produce list of `Block` with `BoundingBox`, `block_type`, and initial `confidence`
-- [ ] T026 [P] Create golden layout fixture: add `input.jpg` and `expected-blocks.json` to `tests/golden/layout/engineering-notes-single-page/`
-- [ ] T027 Implement reading order determination in `packages/layout/src/hand2notes/layout/reading_order.py` — use Surya to assign `reading_order` index to each block in non-linear layouts
-- [ ] T028 Implement PaddleOCR adapter in `packages/ocr/src/hand2notes/ocr/paddle_adapter.py` — text extraction per block region with per-line confidence scores for Spanish and English
-- [ ] T029 [P] Implement TrOCR handwriting fallback adapter in `packages/ocr/src/hand2notes/ocr/trocr_adapter.py` — triggered when PaddleOCR confidence < threshold for a block
-- [ ] T030 [P] Implement Docling adapter in `packages/ocr/src/hand2notes/ocr/docling_adapter.py` — structured document backbone for Markdown-oriented extraction
-- [ ] T031 Implement OCR orchestrator in `packages/ocr/src/hand2notes/ocr/orchestrator.py` — primary path: Docling + PaddleOCR; fallback: TrOCR per block below confidence threshold; sets `block.content` and `block.confidence`
-- [ ] T032 Implement structure reconstructor in `packages/markdown_export/src/hand2notes/markdown_export/reconstructor.py` — maps `BlockType` to Markdown elements: `title` → `#`, `heading` → `##`/`###`, `paragraph` → plain text, `bullet_list` → `- `, `numbered_list` → `1. `; preserves reading order
-- [ ] T033 Implement Markdown note renderer using Jinja2 in `packages/markdown_export/src/hand2notes/markdown_export/renderer.py` — concatenates reconstructed blocks into final Markdown string; inserts YAML front matter placeholder
-- [ ] T034 Implement pipeline stage orchestrator for stages `import → preprocess → detect_layout → recognize_text → reconstruct_structure → generate_output` in `apps/python-api/src/hand2notes/pipeline/orchestrator.py` — async stage execution, PipelineRun creation, status transitions
-- [ ] T035 [P] Implement PipelineRun logger in `packages/storage/src/hand2notes/storage/run_logger.py` — writes stage start/complete/fail to database, emits structured metrics dict
-- [ ] T036 Implement session API router in `apps/python-api/src/hand2notes/api/routers/sessions.py` — `POST /sessions`, `POST /sessions/{id}/pages` (multipart), `GET /sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `PATCH /sessions/{id}/pages/reorder`, `DELETE /sessions/{id}`
-- [ ] T037 Implement pipeline API router skeleton in `apps/python-api/src/hand2notes/api/routers/pipeline.py` — `POST /sessions/{id}/process`, `POST /sessions/{id}/stages/{stage}`, `GET /sessions/{id}/runs/{run_id}`, `POST /sessions/{id}/runs/{run_id}/cancel`
-- [ ] T038 Implement WebSocket progress endpoint `/sessions/{session_id}/progress` in `apps/python-api/src/hand2notes/api/routers/pipeline.py` — streams `stage_started`, `stage_completed`, `page_processed`, `block_detected`, `run_completed` JSON frames
-- [ ] T039 Implement basic vault writer in `packages/markdown_export/src/hand2notes/markdown_export/vault_writer.py` — creates `<vault>/<notebook>/<session>/notes.md` with `diagrams/` and `assets/` subfolders; overwrite mode as default
-- [ ] T040 [P] Implement Import page in `apps/electron-ui/src/renderer/pages/ImportPage.tsx` — file picker integration, image thumbnail list, drag-to-reorder page sequence, session metadata form (name, notebook, topic, tags), submit to `POST /sessions` + `POST /sessions/{id}/pages`
-- [ ] T041 [P] Implement Processing page in `apps/electron-ui/src/renderer/pages/ProcessingPage.tsx` — stage progress bar, per-stage label, WebSocket progress stream, cancel button
-- [ ] T042 Implement session store in `apps/electron-ui/src/renderer/stores/sessionStore.ts` — session object, pages list, current session ID, create/load/delete actions
-- [ ] T043 [P] Implement pipeline store in `apps/electron-ui/src/renderer/stores/pipelineStore.ts` — current run ID, stage statuses, progress percent, cancel action
-- [ ] T044 Wire Electron main process file-picker to Import page via contextBridge in `apps/electron-ui/src/main/file-picker.ts` — opens native system file dialog, returns selected paths to renderer
-- [ ] T045 [P] Implement basic YAML front matter builder in `packages/markdown_export/src/hand2notes/markdown_export/front_matter.py` — generates `title`, `created`, `session`, `source_images`, `tags` fields for US1 export
+- [x] T021 Implement image validation and format normalization in `packages/ingestion/src/hand2notes/ingestion/importer.py` — accept JPG, JPEG, PNG; validate file size (< 50 MB); record source_path, width_px, height_px on Page model
+- [x] T022 [P] Create golden OCR fixture: add `input.jpg` (handwritten page with heading, paragraph, bullet list) and `expected-text.md` to `tests/golden/ocr/mixed-heading-list/`
+- [x] T023 Implement deskew and perspective correction in `packages/preprocessing/src/hand2notes/preprocessing/deskew.py` — OpenCV Hough line detection, affine warp correction, output normalized image
+- [x] T024 [P] Implement denoising, shadow reduction, and contrast normalization in `packages/preprocessing/src/hand2notes/preprocessing/denoise.py` — OpenCV adaptiveThreshold, scikit-image background removal
+- [x] T025 Implement layout region detection in `packages/layout/src/hand2notes/layout/detector.py` — call Surya to produce list of `Block` with `BoundingBox`, `block_type`, and initial `confidence`
+- [x] T026 [P] Create golden layout fixture: add `input.jpg` and `expected-blocks.json` to `tests/golden/layout/engineering-notes-single-page/`
+- [x] T027 Implement reading order determination in `packages/layout/src/hand2notes/layout/reading_order.py` — use Surya to assign `reading_order` index to each block in non-linear layouts
+- [x] T028 Implement PaddleOCR adapter in `packages/ocr/src/hand2notes/ocr/paddle_adapter.py` — text extraction per block region with per-line confidence scores for Spanish and English
+- [x] T029 [P] Implement TrOCR handwriting fallback adapter in `packages/ocr/src/hand2notes/ocr/trocr_adapter.py` — triggered when PaddleOCR confidence < threshold for a block
+- [x] T030 [P] Implement Docling adapter in `packages/ocr/src/hand2notes/ocr/docling_adapter.py` — structured document backbone for Markdown-oriented extraction
+- [x] T031 Implement OCR orchestrator in `packages/ocr/src/hand2notes/ocr/orchestrator.py` — primary path: Docling + PaddleOCR; fallback: TrOCR per block below confidence threshold; sets `block.content` and `block.confidence`
+- [x] T032 Implement structure reconstructor in `packages/markdown_export/src/hand2notes/markdown_export/reconstructor.py` — maps `BlockType` to Markdown elements: `title` → `#`, `heading` → `##`/`###`, `paragraph` → plain text, `bullet_list` → `- `, `numbered_list` → `1. `; preserves reading order
+- [x] T033 Implement Markdown note renderer using Jinja2 in `packages/markdown_export/src/hand2notes/markdown_export/renderer.py` — concatenates reconstructed blocks into final Markdown string; inserts YAML front matter placeholder
+- [x] T034 Implement pipeline stage orchestrator for stages `import → preprocess → detect_layout → recognize_text → reconstruct_structure → generate_output` in `apps/python-api/src/hand2notes/pipeline/orchestrator.py` — async stage execution, PipelineRun creation, status transitions
+- [x] T035 [P] Implement PipelineRun logger in `packages/storage/src/hand2notes/storage/run_logger.py` — writes stage start/complete/fail to database, emits structured metrics dict
+- [x] T036 Implement session API router in `apps/python-api/src/hand2notes/api/routers/sessions.py` — `POST /sessions`, `POST /sessions/{id}/pages` (multipart), `GET /sessions`, `GET /sessions/{id}`, `PATCH /sessions/{id}`, `PATCH /sessions/{id}/pages/reorder`, `DELETE /sessions/{id}`
+- [x] T037 Implement pipeline API router skeleton in `apps/python-api/src/hand2notes/api/routers/pipeline.py` — `POST /sessions/{id}/process`, `POST /sessions/{id}/stages/{stage}`, `GET /sessions/{id}/runs/{run_id}`, `POST /sessions/{id}/runs/{run_id}/cancel`
+- [x] T038 Implement WebSocket progress endpoint `/sessions/{session_id}/progress` in `apps/python-api/src/hand2notes/api/routers/pipeline.py` — streams `stage_started`, `stage_completed`, `page_processed`, `block_detected`, `run_completed` JSON frames
+- [x] T039 Implement basic vault writer in `packages/markdown_export/src/hand2notes/markdown_export/vault_writer.py` — creates `<vault>/<notebook>/<session>/notes.md` with `diagrams/` and `assets/` subfolders; overwrite mode as default
+- [x] T040 [P] Implement Import page in `apps/electron-ui/src/renderer/pages/ImportPage.tsx` — file picker integration, image thumbnail list, drag-to-reorder page sequence, session metadata form (name, notebook, topic, tags), submit to `POST /sessions` + `POST /sessions/{id}/pages`
+- [x] T041 [P] Implement Processing page in `apps/electron-ui/src/renderer/pages/ProcessingPage.tsx` — stage progress bar, per-stage label, WebSocket progress stream, cancel button
+- [x] T042 Implement session store in `apps/electron-ui/src/renderer/stores/sessionStore.ts` — session object, pages list, current session ID, create/load/delete actions
+- [x] T043 [P] Implement pipeline store in `apps/electron-ui/src/renderer/stores/pipelineStore.ts` — current run ID, stage statuses, progress percent, cancel action
+- [x] T044 Wire Electron main process file-picker to Import page via contextBridge in `apps/electron-ui/src/main/file-picker.ts` — opens native system file dialog, returns selected paths to renderer
+- [x] T045 [P] Implement basic YAML front matter builder in `packages/markdown_export/src/hand2notes/markdown_export/front_matter.py` — generates `title`, `created`, `session`, `source_images`, `tags` fields for US1 export
 
 **Checkpoint**: US1 complete and independently testable — import one JPEG page, run full pipeline, receive `notes.md` in the vault folder with recognizable Markdown structure.
 

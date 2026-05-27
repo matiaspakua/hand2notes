@@ -5,6 +5,7 @@
 import type {
   AppConfig,
   CreateSessionRequest,
+  Page,
   PipelineRun,
   PipelineStage,
   ProgressEvent,
@@ -78,7 +79,31 @@ export const api = {
     return request<{ added: unknown[] }>('POST', `/sessions/${id}/pages`, form);
   },
 
+  /** Upload images from local file paths (Electron native picker returns paths, not File objects). */
+  uploadPages: async (id: string, paths: string[]): Promise<Page[]> => {
+    const form = new FormData();
+    for (const filePath of paths) {
+      const response = await fetch(`file://${filePath}`);
+      const blob = await response.blob();
+      const filename = filePath.split('/').pop() ?? 'image.jpg';
+      form.append('files', new File([blob], filename));
+    }
+    const base = await baseHttp();
+    const res = await fetch(`${base}/sessions/${id}/pages`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
+    return res.json() as Promise<Page[]>;
+  },
+
   // --- Pipeline ---
+  startProcessing: (id: string) =>
+    request<{ run_id: string; session_id: string; message: string }>('POST', `/sessions/${id}/process`),
+
+  openProgressSocket: (id: string): WebSocket => {
+    // Port may not be resolved yet; use cached value synchronously
+    if (cachedPort == null) throw new Error('Backend port not resolved yet');
+    return new WebSocket(`ws://127.0.0.1:${cachedPort}${API_PREFIX}/sessions/${id}/progress`);
+  },
+
   process: (id: string, stages?: PipelineStage[], options?: Record<string, unknown>) =>
     request<{ run_id: string; status: string }>('POST', `/sessions/${id}/process`, {
       stages,
