@@ -2,6 +2,71 @@
 
 hand2notes is a local-first desktop application that converts mobile phone photos of handwritten notebook pages into Markdown notes plus companion diagram files.
 
+## Implementation Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 — Setup | Monorepo skeleton, tooling, golden fixtures | ✅ Done |
+| Phase 2 — Foundation | Core models, storage, FastAPI, Electron shell | ✅ Done |
+| Phase 3 — US1 MVP | Ingestion → OCR → Export pipeline | 🔄 In progress |
+| Phase 4 — US2 | Diagram detection and export | ⏳ Pending |
+| Phase 5 — US5 | Obsidian vault organization | ⏳ Pending |
+| Phase 6 — US6 | Review and correction workflow | ⏳ Pending |
+| Phase 7–9 | Tables, visual semantics, polish | ⏳ Pending |
+
+See `specs/001-handwritten-to-obsidian/tasks.md` for the full task breakdown.
+
+## Development Setup
+
+### Prerequisites
+
+- Python 3.12+ with [uv](https://github.com/astral-sh/uv)
+- Node.js 20+ with npm
+
+### Python backend
+
+```bash
+# Install all workspace dependencies
+uv sync
+
+# Run the FastAPI dev server
+uv run --package hand2notes-api uvicorn hand2notes.api.main:app --reload
+
+# Apply database migrations
+cd apps/python-api && uv run alembic upgrade head
+
+# Lint
+uv run ruff check .
+
+# Tests
+uv run pytest
+```
+
+### Electron frontend
+
+```bash
+cd apps/electron-ui
+
+# Install dependencies
+npm install
+
+# Dev mode (hot reload)
+npm run dev
+
+# Production build
+npm run build
+
+# Type check only
+npx tsc --noEmit
+```
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `HAND2NOTES_DB_PATH` | `~/.config/hand2notes/hand2notes.db` | SQLite database location |
+| `HAND2NOTES_API_PORT` | random free port | Port the Python API listens on |
+
 The target is not only OCR. The target is structural reconstruction: reading order, headings, tables, callouts, colors, diagram intent, and session organization, with an expected practical similarity of roughly 80% to 90% versus the physical notebook page.[web:1][web:3][web:17]
 
 ## Goal
