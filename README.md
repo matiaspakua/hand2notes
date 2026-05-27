@@ -231,6 +231,122 @@ TrOCR is useful for handwritten text lines, but not sufficient alone for full-pa
 
 Surya and PaddleOCR are relevant because the core problem is not only text recognition but also layout, tables, and reading order.[web:23][web:49][web:52][web:58]
 
+
+## Local Diagram Understanding Model
+
+The diagram reconstruction stage should include a local multimodal model that acts as the primary diagram interpreter before generating `.drawio`, PlantUML, or Mermaid outputs.
+
+### Role in the pipeline
+
+Proposed diagram pipeline:
+
+1. Detect diagram regions using layout/CV models.
+2. Crop each diagram and collect nearby labels and OCR text.
+3. Send the crop plus OCR/context to a local vision-language model.
+4. Ask the model to produce a structured intermediate JSON representation, for example:
+   - nodes
+   - edges
+   - labels
+   - arrow directions
+   - containers/groups
+   - diagram type
+   - confidence
+5. Convert that JSON into one of:
+   - PlantUML for structured diagrams
+   - Mermaid for simple flow/state/sequence diagrams
+   - `.drawio` XML for free-form geometry-heavy diagrams
+6. Store the original crop and confidence report for manual review.
+
+### Candidate open-source local models
+
+| Model | Why it is relevant | Pros | Cons | Fit for hand2notes |
+|---|---|---|---|---|
+| Qwen2.5-VL | Strong document and diagram understanding, local deployment through Ollama/Hugging Face | Good visual reasoning; can analyze charts, graphics, layouts, and output structured JSON with coordinates; available in 3B, 7B, 32B, 72B variants | Larger variants require significant GPU/RAM; still needs prompt design and post-validation | **Best primary candidate** [web:126][web:129][web:135] |
+| Granite-Vision / Granite-Docling | Integrates well with Docling VLM pipeline and local document workflows | Good local integration inside Docling; useful for page/document tasks | Less directly positioned as the strongest diagram interpreter | Good secondary option inside Docling-centered pipeline [web:111][web:112] |
+| SmolDocling / SmolVLM | Very small local models for cheap inference and fallback tasks | Lightweight; practical for CPU/M-series fallback | Too small to be the main high-fidelity diagram interpreter | Good fallback / preview model, not main interpreter [web:111][web:112] |
+| DeepSeek-OCR-3B | VLM-oriented OCR/document conversion option in Docling catalog | Good for Markdown conversion workflows | More document conversion focused than diagram-graph reconstruction | Secondary experimental option [web:112] |
+| Phi-4-Multimodal / Pixtral / Gemma vision options | Available in Docling catalog for local multimodal use | Strong general multimodal capability | More integration and evaluation work; weaker evidence here for diagram-first choice | Benchmark candidates, not first pick [web:112] |
+
+### Selection
+
+Best-guess choice for the main local diagram interpreter: **Qwen2.5-VL**.
+
+Reason:
+- It is explicitly described as strong at understanding documents and diagrams.
+- It can analyze charts, icons, graphics, and layouts.
+- It can generate structured outputs and stable JSON.
+- It can localize objects with bounding boxes or points, which is useful for node-edge reconstruction.
+- It is available locally through Ollama in several sizes, making phased deployment practical. [web:126][web:129][web:135]
+
+### Recommended deployment choice
+
+- Default high-quality model: `qwen2.5vl:7b`
+- Low-resource fallback: `qwen2.5vl:3b`
+- Future high-end option: `qwen2.5vl:32b`
+
+The 7B model is the best practical balance for local quality versus hardware requirements, while the 3B model is suitable for laptops with tighter memory constraints. Ollama lists the 3B model at about 3.2GB and the 7B model at about 6.0GB. [web:126]
+
+### Why not use the VLM alone
+
+The VLM should not directly emit final `.drawio` or PlantUML without an intermediate schema.
+
+Safer architecture:
+- VLM produces constrained JSON.
+- Python validators normalize the JSON.
+- Deterministic renderers generate PlantUML, Mermaid, or `.drawio`.
+- Review UI shows diff between source crop and reconstructed diagram.
+
+This reduces hallucination risk and keeps diagram generation testable.
+
+## Updated Recommended Stack
+
+### Core backend
+
+- Python 3.12+
+- FastAPI
+- Pydantic
+- OpenCV
+- NumPy
+- scikit-image
+- Pillow
+
+### OCR and layout
+
+- Docling as structured document backbone. [web:1][web:112]
+- PaddleOCR for OCR baseline and table/layout extraction. [web:23]
+- Surya for reading order and non-linear layout understanding. [web:58]
+- TrOCR for handwriting line recognition fallback. [web:44][web:47]
+
+### Diagram understanding
+
+- Qwen2.5-VL via Ollama as the primary local diagram interpreter. [web:126][web:129]
+- Optional Docling VLM integration for figure classification and local picture description. [web:111][web:112]
+- Custom Python schema to represent nodes, edges, containers, and styling.
+
+### Diagram generation
+
+- PlantUML for structured engineering diagrams. [web:15]
+- Mermaid for simple flow/state/sequence diagrams.
+- Draw.io / diagrams.net XML for free-form diagram reconstruction. [web:50][web:53]
+
+### Frontend
+
+- Electron
+- React
+- TypeScript
+- Motion
+- GSAP
+- Markdown preview based on markdown-it or unified ecosystem
+
+### Local model runtime
+
+- Ollama as the default local runtime for the vision-language diagram model. [web:126]
+- Hugging Face Transformers as an advanced path for direct Python inference and tighter pipeline control. [web:112]
+
+### Recommended decision
+
+If only one local multimodal model is selected now, use **Qwen2.5-VL 7B through Ollama** as the primary diagram interpreter in the pipeline, with deterministic Python renderers for PlantUML, Mermaid, and `.drawio` generation. [web:126][web:129][web:135]
+
 ## License Direction
 
 Prefer a permissive project license unless there is a reason to enforce copyleft:
