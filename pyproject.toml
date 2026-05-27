@@ -1,0 +1,40 @@
+[project]
+name = "hand2notes-workspace"
+version = "0.1.0"
+description = "Handwritten notes to Obsidian vault — monorepo workspace root"
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/python-api"]
+
+[tool.uv.sources]
+hand2notes-core-models = { workspace = true }
+hand2notes-ingestion = { workspace = true }
+hand2notes-preprocessing = { workspace = true }
+hand2notes-layout = { workspace = true }
+hand2notes-ocr = { workspace = true }
+hand2notes-tables = { workspace = true }
+hand2notes-diagrams = { workspace = true }
+hand2notes-markdown-export = { workspace = true }
+hand2notes-review = { workspace = true }
+hand2notes-storage = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["packages", "apps/python-api/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "apps/python-api/tests"]

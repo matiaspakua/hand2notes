@@ -20,13 +20,13 @@
 
 **Purpose**: Monorepo skeleton, tooling, golden fixture structure, and development environment.
 
-- [ ] T001 Initialize monorepo directory structure: `apps/electron-ui/`, `apps/python-api/`, `packages/`, `samples/`, `tests/golden/`, `docs/` at repository root
-- [ ] T002 [P] Configure Python backend project in `apps/python-api/pyproject.toml` — uv workspace, FastAPI, Uvicorn, Pydantic v2, SQLModel, OpenCV, NumPy, scikit-image, Pillow, Docling, PaddleOCR, Surya, TrOCR, python-frontmatter, Jinja2, llama-cpp-python, pytest, pytest-asyncio
-- [ ] T003 [P] Configure Electron frontend project in `apps/electron-ui/package.json` — React 18, TypeScript 5.x, Electron, Motion, GSAP, markdown-it, Zustand, Vitest, ESLint, Prettier
-- [ ] T004 [P] Configure ruff (linting + formatting) for Python in `apps/python-api/pyproject.toml` and ESLint + Prettier for TypeScript in `apps/electron-ui/.eslintrc.json` and `.prettierrc`
-- [ ] T005 Create golden fixture directory structure: `tests/golden/layout/`, `tests/golden/tables/`, `tests/golden/diagrams/`, `tests/golden/ocr/` at repository root
-- [ ] T006 [P] Initialize uv workspaces for all Python packages in `packages/` — `core_models`, `ingestion`, `preprocessing`, `layout`, `ocr`, `tables`, `diagrams`, `markdown_export`, `review`, `storage`
-- [ ] T007 Configure Alembic for SQLite migrations in `apps/python-api/alembic.ini` and `apps/python-api/migrations/env.py`
+- [x] T001 Initialize monorepo directory structure: `apps/electron-ui/`, `apps/python-api/`, `packages/`, `samples/`, `tests/golden/`, `docs/` at repository root
+- [x] T002 [P] Configure Python backend project in `apps/python-api/pyproject.toml` — uv workspace, FastAPI, Uvicorn, Pydantic v2, SQLModel, OpenCV, NumPy, scikit-image, Pillow, Docling, PaddleOCR, Surya, TrOCR, python-frontmatter, Jinja2, llama-cpp-python, pytest, pytest-asyncio
+- [x] T003 [P] Configure Electron frontend project in `apps/electron-ui/package.json` — React 18, TypeScript 5.x, Electron, Motion, GSAP, markdown-it, Zustand, Vitest, ESLint, Prettier
+- [x] T004 [P] Configure ruff (linting + formatting) for Python in `apps/python-api/pyproject.toml` and ESLint + Prettier for TypeScript in `apps/electron-ui/.eslintrc.json` and `.prettierrc`
+- [x] T005 Create golden fixture directory structure: `tests/golden/layout/`, `tests/golden/tables/`, `tests/golden/diagrams/`, `tests/golden/ocr/` at repository root
+- [x] T006 [P] Initialize uv workspaces for all Python packages in `packages/` — `core_models`, `ingestion`, `preprocessing`, `layout`, `ocr`, `tables`, `diagrams`, `markdown_export`, `review`, `storage`
+- [x] T007 Configure Alembic for SQLite migrations in `apps/python-api/alembic.ini` and `apps/python-api/migrations/env.py`
 
 ---
 
@@ -36,19 +36,19 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T008 Implement core Pydantic v2 models in `packages/core_models/src/hand2notes/core_models/models.py` — `VaultConfig`, `Session`, `Page`, `Block`, `BoundingBox`, `VisualSemantics`, `ExportArtifact`, `PipelineRun`
-- [ ] T009 [P] Implement specialized block models in `packages/core_models/src/hand2notes/core_models/blocks.py` — `TableBlock` (headers, rows, caption, fallback_type, fallback_path), `DiagramBlock` (diagram_type, nodes, edges, vlm_json_raw, generated_source_path, review_decision), `DiagramNode`, `DiagramEdge`
-- [ ] T010 [P] Implement all project enums in `packages/core_models/src/hand2notes/core_models/enums.py` — `PipelineStage`, `SessionStatus`, `ReviewStatus`, `ExportMode`, `VLMRuntime`, `FallbackType`, `DiagramType`, `DiagramFormat`, `DiagramDecision`, `ArtifactType`, `EdgeDirection`, `RunStatus`, `BlockType`
-- [ ] T011 Implement SQLModel database table definitions in `packages/storage/src/hand2notes/storage/db_models.py` — SQLite-backed tables for Session, Page, Block, TableBlock, DiagramBlock, ExportArtifact, PipelineRun
-- [ ] T012 Implement database initialization and async session factory in `packages/storage/src/hand2notes/storage/database.py` — SQLite engine, create-all, engine lifecycle with SQLModel
-- [ ] T013 Generate initial Alembic migration from SQLModel tables in `apps/python-api/migrations/versions/001_initial_schema.py`
-- [ ] T014 Implement FastAPI application entry point with lifespan, CORS, and router registration in `apps/python-api/src/hand2notes/api/main.py`
-- [ ] T015 [P] Implement structured logging middleware and global error handlers in `apps/python-api/src/hand2notes/api/middleware.py` — request/response logging, pipeline error envelope
-- [ ] T016 [P] Implement artifact registry service for tracking ExportArtifact records in `packages/storage/src/hand2notes/storage/artifact_registry.py`
-- [ ] T017 Implement Electron main process: spawn Python API on random port, communicate port to renderer via IPC in `apps/electron-ui/src/main/index.ts`
-- [ ] T018 [P] Implement Electron preload script with contextBridge for file-picker and OS-level operations in `apps/electron-ui/src/preload/index.ts`
-- [ ] T019 [P] Initialize Zustand store structure with session, pipeline, and review slices in `apps/electron-ui/src/renderer/stores/index.ts`
-- [ ] T020 Implement HTTP + WebSocket API client service for the Python backend in `apps/electron-ui/src/renderer/services/api.ts` — typed wrappers for all session, pipeline, and config endpoints
+- [x] T008 Implement core Pydantic v2 models in `packages/core_models/src/hand2notes/core_models/models.py` — `VaultConfig`, `Session`, `Page`, `Block`, `BoundingBox`, `VisualSemantics`, `ExportArtifact`, `PipelineRun`
+- [x] T009 [P] Implement specialized block models in `packages/core_models/src/hand2notes/core_models/blocks.py` — `TableBlock` (headers, rows, caption, fallback_type, fallback_path), `DiagramBlock` (diagram_type, nodes, edges, vlm_json_raw, generated_source_path, review_decision), `DiagramNode`, `DiagramEdge`
+- [x] T010 [P] Implement all project enums in `packages/core_models/src/hand2notes/core_models/enums.py` — `PipelineStage`, `SessionStatus`, `ReviewStatus`, `ExportMode`, `VLMRuntime`, `FallbackType`, `DiagramType`, `DiagramFormat`, `DiagramDecision`, `ArtifactType`, `EdgeDirection`, `RunStatus`, `BlockType`
+- [x] T011 Implement SQLModel database table definitions in `packages/storage/src/hand2notes/storage/db_models.py` — SQLite-backed tables for Session, Page, Block, TableBlock, DiagramBlock, ExportArtifact, PipelineRun
+- [x] T012 Implement database initialization and async session factory in `packages/storage/src/hand2notes/storage/database.py` — SQLite engine, create-all, engine lifecycle with SQLModel
+- [x] T013 Generate initial Alembic migration from SQLModel tables in `apps/python-api/migrations/versions/001_initial_schema.py`
+- [x] T014 Implement FastAPI application entry point with lifespan, CORS, and router registration in `apps/python-api/src/hand2notes/api/main.py`
+- [x] T015 [P] Implement structured logging middleware and global error handlers in `apps/python-api/src/hand2notes/api/middleware.py` — request/response logging, pipeline error envelope
+- [x] T016 [P] Implement artifact registry service for tracking ExportArtifact records in `packages/storage/src/hand2notes/storage/artifact_registry.py`
+- [x] T017 Implement Electron main process: spawn Python API on random port, communicate port to renderer via IPC in `apps/electron-ui/src/main/index.ts`
+- [x] T018 [P] Implement Electron preload script with contextBridge for file-picker and OS-level operations in `apps/electron-ui/src/preload/index.ts`
+- [x] T019 [P] Initialize Zustand store structure with session, pipeline, and review slices in `apps/electron-ui/src/renderer/stores/index.ts`
+- [x] T020 Implement HTTP + WebSocket API client service for the Python backend in `apps/electron-ui/src/renderer/services/api.ts` — typed wrappers for all session, pipeline, and config endpoints
 
 **Checkpoint**: Foundation ready — all user story phases can now proceed in order (or in parallel if staffed).
 
