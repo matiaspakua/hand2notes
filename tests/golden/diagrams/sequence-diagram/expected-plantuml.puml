@@ -1,0 +1,13 @@
+@startuml
+actor User
+participant "Frontend" as FE
+participant "Backend" as BE
+database "Database" as DB
+
+User -> FE: Submit Form
+FE -> BE: POST /api/data
+BE -> DB: INSERT record
+DB --> BE: OK
+BE --> FE: 200 Response
+FE --> User: Show confirmation
+@enduml

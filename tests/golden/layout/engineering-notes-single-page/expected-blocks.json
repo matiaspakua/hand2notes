@@ -1,0 +1,40 @@
+{
+  "blocks": [
+    {
+      "reading_order": 0,
+      "block_type": "title",
+      "bbox": { "x": 40, "y": 30, "width": 600, "height": 60 },
+      "confidence": 0.92
+    },
+    {
+      "reading_order": 1,
+      "block_type": "heading",
+      "bbox": { "x": 40, "y": 110, "width": 400, "height": 40 },
+      "confidence": 0.88
+    },
+    {
+      "reading_order": 2,
+      "block_type": "paragraph",
+      "bbox": { "x": 40, "y": 165, "width": 620, "height": 80 },
+      "confidence": 0.85
+    },
+    {
+      "reading_order": 3,
+      "block_type": "bullet_list",
+      "bbox": { "x": 55, "y": 260, "width": 580, "height": 120 },
+      "confidence": 0.83
+    },
+    {
+      "reading_order": 4,
+      "block_type": "heading",
+      "bbox": { "x": 40, "y": 400, "width": 360, "height": 40 },
+      "confidence": 0.87
+    },
+    {
+      "reading_order": 5,
+      "block_type": "paragraph",
+      "bbox": { "x": 40, "y": 455, "width": 620, "height": 50 },
+      "confidence": 0.84
+    }
+  ]
+}

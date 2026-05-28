@@ -217,3 +217,16 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .DS_Store
+
+# Node.js / Electron frontend (apps/electron-ui)
+node_modules/
+.pnpm-store/
+out/
+dist-electron/
+*.tsbuildinfo
+.vite/
+.turbo/
+
+# Local ML models (not committed — downloaded per environment)
+models/
+*.gguf
