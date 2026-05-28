@@ -38,4 +38,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "apps/python-api/tests", "packages/text_correction/tests"]
+testpaths = ["tests", "apps/python-api/tests", "packages/text_correction/tests", "packages/layout/tests", "packages/markdown_export/tests"]
