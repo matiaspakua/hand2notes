@@ -14,6 +14,7 @@ from hand2notes.core_models.enums import BlockType, DiagramType
 from hand2notes.core_models.models import Block, BoundingBox, Page
 
 try:
+    from surya.foundation import FoundationPredictor as _FoundationPredictor
     from surya.layout import LayoutPredictor as _LayoutPredictor
 
     _SURYA_AVAILABLE = True
@@ -53,17 +54,27 @@ def detect_layout(image_path: Path, page: Page) -> list[Block]:
     """Run Surya layout detection on a preprocessed image.
 
     Returns blocks in the order Surya produces them (reading order is assigned
-    by reading_order.py in the next step).
+    by reading_order.py in the next step.
     """
     if _SURYA_AVAILABLE:
-        return _detect_with_surya(image_path, page)
+        try:
+            return _detect_with_surya(image_path, page)
+        except Exception as exc:
+            # Surya may be installed but incompatible with the available model
+            # or its transformers version. Fallback to the geometric full-page
+            # block so the pipeline remains usable.
+            from logging import getLogger
+            getLogger(__name__).warning(
+                "Surya layout detection failed: %s — falling back to geometry", exc
+            )
     return _detect_fallback(page)
 
 
 def _detect_with_surya(image_path: Path, page: Page) -> list[Block]:
     from PIL import Image as PILImage
 
-    predictor = _LayoutPredictor()
+    foundation = _FoundationPredictor()
+    predictor = _LayoutPredictor(foundation)
     pil_image = PILImage.open(image_path).convert("RGB")
     results = predictor([pil_image])
 

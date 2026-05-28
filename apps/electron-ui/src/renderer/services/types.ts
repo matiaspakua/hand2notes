@@ -79,17 +79,26 @@ export interface ProgressEvent {
   event:
     | 'stage_started'
     | 'stage_completed'
-    | 'stage_failed'
-    | 'page_processed'
-    | 'block_detected'
-    | 'run_completed';
-  stage: string;
-  page_id: string | null;
-  block_id: string | null;
-  confidence?: number;
-  message: string;
-  progress_percent: number;
-  timestamp: string;
+    | 'page_layout_detected'
+    | 'run_completed'
+    | 'run_failed'
+    | 'run_cancelled';
+  stage?: string;
+  page_id?: string;
+  page_index?: number;
+  total_pages?: number;
+  page_width?: number;
+  page_height?: number;
+  blocks?: {
+    block_type: string;
+    bbox: BoundingBox;
+    confidence: number;
+  }[];
+  metrics?: Record<string, number>;
+  error?: string;
+  message?: string;
+  progress_percent?: number;
+  timestamp?: string;
 }
 
 export interface ReviewPayload {

@@ -65,16 +65,19 @@ async def run_pipeline(
         (PipelineStage.GENERATE_OUTPUT, _stage_generate_output),
     ]
 
+    log.info(
+        "Pipeline starting: session=%s name=%r page_count=%d stages=%d",
+        session.id, session.name, len(pages), len(stages),
+    )
+
     cumulative_elapsed = 0.0
     for stage, stage_fn in stages:
         _check_cancel()
+        log.info("Stage starting: session=%s stage=%s", session.id, stage.value)
         _emit({"event": "stage_started", "stage": stage.value})
         # Yield so any queued WebSocket sends can flush before the stage blocks.
         await asyncio.sleep(0)
 
-        # Run audit logging is persisted only when a DB session is supplied.
-        # Sessions/pages currently live in memory (DB wiring lands in Phase 5),
-        # so logging is skipped rather than crashing on a None session.
         run_id = None
         stage_start = asyncio.get_event_loop().time()
         try:
@@ -86,12 +89,46 @@ async def run_pipeline(
             cumulative_elapsed += elapsed
             metrics = {**(metrics or {}), "elapsed_s": round(elapsed, 3)}
             if cumulative_elapsed > 90:
-                log.warning("Pipeline cumulative time %.1fs exceeds 90s threshold", cumulative_elapsed)
+                log.warning(
+                    "Pipeline running slow: session=%s cumulative=%.1fs exceeds 90s threshold",
+                    session.id, cumulative_elapsed,
+                )
+            log.info(
+                "Stage completed: session=%s stage=%s elapsed=%.2fs metrics=%s",
+                session.id, stage.value, elapsed, metrics,
+            )
             if db is not None and run_id is not None:
                 await run_logger.complete_run(db, run_id, metrics)
             _emit({"event": "stage_completed", "stage": stage.value, "metrics": metrics})
-            await asyncio.sleep(0)  # Let WebSocket flush stage_completed before next stage starts
-            # Emit per-page progress events for batch sessions
+            await asyncio.sleep(0)  # flush stage_completed before next stage starts
+
+            # After layout detection: emit per-page block data for the canvas overlay
+            if stage == PipelineStage.DETECT_LAYOUT:
+                for idx, page in enumerate(pages):
+                    _emit({
+                        "event": "page_layout_detected",
+                        "page_id": str(page.id),
+                        "page_index": idx,
+                        "total_pages": len(pages),
+                        "page_width": page.width_px,
+                        "page_height": page.height_px,
+                        "blocks": [
+                            {
+                                "block_type": b.block_type.value,
+                                "bbox": {
+                                    "x": b.bbox.x,
+                                    "y": b.bbox.y,
+                                    "width": b.bbox.width,
+                                    "height": b.bbox.height,
+                                },
+                                "confidence": round(b.confidence, 3),
+                            }
+                            for b in page.blocks
+                        ],
+                    })
+                    await asyncio.sleep(0)
+
+            # Emit per-page progress for large batches
             if len(pages) >= 20:
                 for idx, page in enumerate(pages):
                     _emit({
@@ -102,18 +139,26 @@ async def run_pipeline(
                         "total_pages": len(pages),
                     })
         except asyncio.CancelledError:
+            log.info("Stage cancelled: session=%s stage=%s", session.id, stage.value)
             if db is not None and run_id is not None:
                 await run_logger.cancel_run(db, run_id)
             raise
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
-            log.exception("Stage %s failed: %s", stage.value, error_msg)
+            log.exception(
+                "Stage failed: session=%s stage=%s error=%s",
+                session.id, stage.value, error_msg,
+            )
             if db is not None and run_id is not None:
                 await run_logger.fail_run(db, run_id, error_msg)
             raise PipelineError(f"Stage {stage.value} failed: {error_msg}") from exc
 
+    log.info(
+        "Pipeline completed: session=%s total_elapsed=%.2fs",
+        session.id, cumulative_elapsed,
+    )
     _emit({"event": "run_completed", "session_id": str(session.id)})
-    await asyncio.sleep(0)  # Let WebSocket send run_completed before the task finishes
+    await asyncio.sleep(0)  # flush run_completed before task finishes
     return session
 
 
@@ -126,10 +171,15 @@ async def _stage_import(
 ) -> dict[str, float]:
     from hand2notes.ingestion.importer import import_image
 
+    log.info("Importing %d page(s) for session %s", len(pages), session.id)
     for page in pages:
         reimported = import_image(page.source_path, session.id, page.sequence)
         page.width_px = reimported.width_px
         page.height_px = reimported.height_px
+        log.debug(
+            "Page %d imported: %s (%dx%d px)",
+            page.sequence, page.source_path.name, page.width_px, page.height_px,
+        )
 
     return {"pages_imported": float(len(pages))}
 
@@ -154,6 +204,7 @@ async def _stage_preprocess(
     from hand2notes.preprocessing.denoise import denoise_file
     from hand2notes.preprocessing.deskew import deskew_file
 
+    log.info("Preprocessing %d page(s): deskew → denoise → resize", len(pages))
     corrected = 0
     for page in pages:
         work_dir = page.source_path.parent / "preprocessed"
@@ -161,24 +212,31 @@ async def _stage_preprocess(
 
         deskewed_path = work_dir / f"{page.id}_deskewed.jpg"
         result = deskew_file(page.source_path, deskewed_path)
+        if result.was_corrected:
+            log.info("Page %d: deskew correction applied", page.sequence)
+            corrected += 1
 
         denoised_path = work_dir / f"{page.id}_denoised.jpg"
         denoise_file(deskewed_path, denoised_path)
 
-        # Resize to max 1600px wide so downstream ML runs at practical speed
         processed_path = work_dir / f"{page.id}_processed.jpg"
         _resize_for_processing(denoised_path, processed_path)
 
         page.preprocessed_path = processed_path
-        # Update page dimensions to match the resized image
         from PIL import Image as PILImage
         with PILImage.open(processed_path) as img:
             page.width_px, page.height_px = img.size
 
         page.pipeline_stage = PipelineStage.PREPROCESS
-        if result.was_corrected:
-            corrected += 1
+        log.debug(
+            "Page %d preprocessed: output=%s final_size=%dx%d",
+            page.sequence, processed_path.name, page.width_px, page.height_px,
+        )
 
+    log.info(
+        "Preprocess complete: %d page(s) processed, %d deskew correction(s) applied",
+        len(pages), corrected,
+    )
     return {"pages_preprocessed": float(len(pages)), "deskew_corrections": float(corrected)}
 
 
@@ -188,6 +246,7 @@ async def _stage_detect_layout(
     from hand2notes.layout.detector import detect_layout
     from hand2notes.layout.reading_order import assign_reading_order
 
+    log.info("Layout detection starting: %d page(s)", len(pages))
     total_blocks = 0
     for page in pages:
         image_path = page.preprocessed_path or page.source_path
@@ -197,6 +256,25 @@ async def _stage_detect_layout(
         page.pipeline_stage = PipelineStage.DETECT_LAYOUT
         total_blocks += len(blocks)
 
+        # Log per-page block type distribution for observability
+        type_counts: dict[str, int] = {}
+        for b in blocks:
+            type_counts[b.block_type.value] = type_counts.get(b.block_type.value, 0) + 1
+        log.info(
+            "Page %d layout detected: %d block(s) — %s",
+            page.sequence, len(blocks),
+            ", ".join(f"{k}={v}" for k, v in sorted(type_counts.items())),
+        )
+        if not blocks:
+            log.warning(
+                "Page %d returned no layout blocks — image may be blank or unreadable: %s",
+                page.sequence, image_path.name,
+            )
+
+    log.info(
+        "Layout detection complete: %d total blocks across %d page(s) (avg %.1f/page)",
+        total_blocks, len(pages), total_blocks / max(len(pages), 1),
+    )
     return {"total_blocks": float(total_blocks)}
 
 
@@ -205,15 +283,29 @@ async def _stage_recognize_text(
 ) -> dict[str, float]:
     from hand2notes.ocr.orchestrator import run_ocr_on_page
 
+    log.info(
+        "OCR starting: %d page(s), languages=%s, confidence_threshold=%.2f",
+        len(pages), config.ocr_languages, config.confidence_threshold,
+    )
     total_blocks = 0
     mean_conf_sum = 0.0
     for page in pages:
         image_path = page.preprocessed_path or page.source_path
+        vlm_model = (
+            config.vlm_transcription_model
+            if config.vlm_transcription_enabled
+            else None
+        )
+        log.info(
+            "OCR running on page %d: %s (vlm=%s)",
+            page.sequence, image_path.name, vlm_model or "disabled",
+        )
         run_ocr_on_page(
             page,
             image_path,
             confidence_threshold=config.confidence_threshold,
             languages=config.ocr_languages,
+            vlm_model=vlm_model,
         )
         page.pipeline_stage = PipelineStage.RECOGNIZE_TEXT
         if page.blocks:
@@ -221,6 +313,17 @@ async def _stage_recognize_text(
             page.overall_confidence = sum(confs) / len(confs)
             mean_conf_sum += page.overall_confidence
             total_blocks += len(page.blocks)
+            flagged = sum(1 for b in page.blocks if b.review_flag)
+            log.info(
+                "Page %d OCR complete: %d block(s), confidence=%.2f, flagged=%d",
+                page.sequence, len(page.blocks), page.overall_confidence, flagged,
+            )
+            if page.overall_confidence < config.confidence_threshold:
+                log.warning(
+                    "Page %d low overall confidence (%.2f < threshold %.2f) — "
+                    "review recommended",
+                    page.sequence, page.overall_confidence, config.confidence_threshold,
+                )
 
     mean_conf = mean_conf_sum / len(pages) if pages else 0.0
 
@@ -229,6 +332,13 @@ async def _stage_recognize_text(
     for page in pages:
         urls_detected += _run_visual_semantics_for_page(page)
 
+    if urls_detected:
+        log.info("Visual semantics: %d URL reference(s) detected across all pages", urls_detected)
+
+    log.info(
+        "OCR complete: %d block(s) total, mean_confidence=%.2f across %d page(s)",
+        total_blocks, mean_conf, len(pages),
+    )
     return {
         "blocks_recognized": float(total_blocks),
         "confidence_mean": mean_conf,
@@ -321,7 +431,10 @@ def _process_tables_in_page(page: Page, image_path, config: VaultConfig) -> int:
     new_blocks = []
     for block in page.blocks:
         if isinstance(block, TableBlock):
-            block = extract_cells(block, page, image_path)
+            # Skip re-extraction for VLM-transcribed tables (confidence >= 0.9).
+            # Their headers/rows are already populated from the VLM output.
+            if block.reconstruction_confidence < 0.9:
+                block = extract_cells(block, page, image_path)
             block.caption = detect_caption(block, page.blocks)
 
             if block.reconstruction_confidence < 0.5:
@@ -365,13 +478,21 @@ async def _stage_detect_diagrams(
     from hand2notes.diagrams.crop_saver import save_crop
     from hand2notes.diagrams.vlm_validator import validate_vlm_response
 
+    if not config.vault_root:
+        log.warning(
+            "Diagram detection skipped: vault_root not configured — "
+            "set vault_root via PUT /api/v1/config to enable diagram export"
+        )
+        return {"diagrams_found": 0.0, "diagrams_interpreted": 0.0}
+
+    log.info(
+        "Diagram detection starting: vlm_runtime=%s model=%s",
+        config.vlm_runtime, config.vlm_model,
+    )
     diagrams_found = 0
     diagrams_interpreted = 0
 
     for page in pages:
-        if not config.vault_root:
-            continue
-        # Determine assets directory using resolve_session_folder if available
         try:
             from hand2notes.markdown_export.vault_writer import resolve_session_folder
             session_folder = resolve_session_folder(config, session)
@@ -385,6 +506,10 @@ async def _stage_detect_diagrams(
             if not isinstance(block, DiagramBlock):
                 continue
             diagrams_found += 1
+            log.info(
+                "Diagram block found: page=%d block=%s — saving crop and running VLM",
+                page.sequence, block.id,
+            )
 
             # Always save crop first (constitution III)
             save_crop(block, page, assets_dir)
@@ -397,7 +522,10 @@ async def _stage_detect_diagrams(
                 else:
                     from hand2notes.diagrams.vlm_client_llamacpp import interpret_diagram as llama_interpret
                     if not config.vlm_model:
-                        log.warning("vlm_model not configured; skipping VLM for block %s", block.id)
+                        log.warning(
+                            "vlm_model path not set — skipping VLM for diagram block %s on page %d",
+                            block.id, page.sequence,
+                        )
                         block.review_decision = DiagramDecision.PENDING
                         continue
                     raw = llama_interpret(block.crop_path, model_path=config.vlm_model)
@@ -410,18 +538,33 @@ async def _stage_detect_diagrams(
                 block.reconstruction_confidence = result.reconstruction_confidence
 
                 if result.review_flag:
+                    log.info(
+                        "Diagram block %s flagged for review (confidence=%.2f)",
+                        block.id, result.reconstruction_confidence,
+                    )
                     block.review_decision = DiagramDecision.PENDING
                 else:
-                    # Generate source file
                     _write_diagram_source(block, diagrams_dir)
+                    log.info(
+                        "Diagram block %s interpreted: type=%s confidence=%.2f format=%s",
+                        block.id, result.diagram_type, result.reconstruction_confidence,
+                        block.generated_format,
+                    )
                     diagrams_interpreted += 1
 
             except Exception as exc:
-                log.warning("VLM interpretation failed for block %s: %s", block.id, exc)
+                log.warning(
+                    "VLM interpretation failed for diagram block %s on page %d: %s",
+                    block.id, page.sequence, exc,
+                )
                 block.review_decision = DiagramDecision.PENDING
 
         page.pipeline_stage = PipelineStage.DETECT_DIAGRAMS
 
+    log.info(
+        "Diagram detection complete: %d found, %d interpreted, %d pending review",
+        diagrams_found, diagrams_interpreted, diagrams_found - diagrams_interpreted,
+    )
     return {
         "diagrams_found": float(diagrams_found),
         "diagrams_interpreted": float(diagrams_interpreted),
@@ -429,7 +572,11 @@ async def _stage_detect_diagrams(
 
 
 def _write_diagram_source(block: DiagramBlock, diagrams_dir: Path) -> None:
-    """Render and write PlantUML or draw.io source for a validated DiagramBlock."""
+    """Render and write PlantUML or draw.io source for a validated DiagramBlock.
+
+    Attempts to export a companion PNG via the plantuml / drawio CLI.
+    If the CLI is not installed, the source file is still written and a warning is logged.
+    """
     from hand2notes.core_models.enums import DiagramFormat, DiagramType
 
     DRAWIO_TYPES = {DiagramType.ANNOTATED_SKETCH, DiagramType.GRAPH_NETWORK}
@@ -449,6 +596,21 @@ def _write_diagram_source(block: DiagramBlock, diagrams_dir: Path) -> None:
     out_path.write_text(content, encoding="utf-8")
     block.generated_source_path = out_path
     block.generated_format = fmt
+    log.info(
+        "Diagram source written: %s (%s, %d bytes)", out_path.name, fmt, out_path.stat().st_size
+    )
+
+    # Attempt PNG export — degrades gracefully if CLI not available
+    try:
+        from hand2notes.diagrams.png_exporter import export_drawio_png, export_plantuml_png
+        if fmt == DiagramFormat.PLANTUML:
+            png_path = export_plantuml_png(out_path)
+        else:
+            png_path = export_drawio_png(out_path)
+        if png_path:
+            block.generated_png_path = png_path
+    except Exception as exc:
+        log.warning("PNG export raised an unexpected error for %s: %s", out_path.name, exc)
 
 
 async def _stage_generate_output(

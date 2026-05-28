@@ -111,6 +111,13 @@ def _infer_type(
     is_first_block: bool = False,
 ) -> BlockType:
     declared = block.block_type
+
+    # VLM-transcribed blocks (confidence >= 0.9) are already well-typed —
+    # do not reclassify them, since their multi-line structural content would
+    # be mis-detected as numbered lists, headings, etc.
+    if (block.confidence or 0.0) >= 0.9:
+        return declared
+
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     first_line = lines[0] if lines else text
 

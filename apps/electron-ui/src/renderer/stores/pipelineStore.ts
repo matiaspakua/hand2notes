@@ -8,6 +8,12 @@ export interface StageState {
   metrics: Record<string, number>;
 }
 
+export interface BlockOverlay {
+  block_type: string;
+  bbox: { x: number; y: number; width: number; height: number };
+  confidence: number;
+}
+
 interface PipelineState {
   runId: string | null;
   sessionId: string | null;
@@ -17,6 +23,14 @@ interface PipelineState {
   isCancelling: boolean;
   error: string | null;
 
+  // Canvas overlay state — populated from page_layout_detected WS events
+  currentPageId: string | null;
+  currentPageIndex: number;
+  totalPages: number;
+  currentPageWidth: number;
+  currentPageHeight: number;
+  currentPageBlocks: BlockOverlay[];
+
   startRun: (runId: string, sessionId: string) => void;
   setStageStarted: (stage: string) => void;
   setStageCompleted: (stage: string, metrics: Record<string, number>) => void;
@@ -25,15 +39,24 @@ interface PipelineState {
   requestCancel: () => void;
   finishRun: () => void;
   reset: () => void;
+  setPageLayout: (
+    pageId: string,
+    pageIndex: number,
+    totalPages: number,
+    blocks: BlockOverlay[],
+    pageWidth: number,
+    pageHeight: number,
+  ) => void;
 }
 
-const PIPELINE_STAGES = [
+export const PIPELINE_STAGES = [
   'import',
   'preprocess',
   'detect_layout',
   'recognize_text',
   'text_correction',
   'reconstruct_structure',
+  'detect_diagrams',
   'generate_output',
 ];
 
@@ -49,8 +72,25 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   isCancelling: false,
   error: null,
 
+  currentPageId: null,
+  currentPageIndex: 0,
+  totalPages: 0,
+  currentPageWidth: 0,
+  currentPageHeight: 0,
+  currentPageBlocks: [],
+
   startRun: (runId, sessionId) =>
-    set({ runId, sessionId, stages: initialStages(), progressPercent: 0, isRunning: true, isCancelling: false, error: null }),
+    set({
+      runId,
+      sessionId,
+      stages: initialStages(),
+      progressPercent: 0,
+      isRunning: true,
+      isCancelling: false,
+      error: null,
+      currentPageId: null,
+      currentPageBlocks: [],
+    }),
 
   setStageStarted: (stage) =>
     set((s) => ({
@@ -60,7 +100,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   setStageCompleted: (stage, metrics) =>
     set((s) => {
       const updated = s.stages.map((st) =>
-        st.stage === stage ? { ...st, status: 'completed' as StageStatus, metrics } : st
+        st.stage === stage ? { ...st, status: 'completed' as StageStatus, metrics } : st,
       );
       const completed = updated.filter((st) => st.status === 'completed').length;
       return { stages: updated, progressPercent: Math.round((completed / PIPELINE_STAGES.length) * 100) };
@@ -75,5 +115,19 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   setError: (error) => set({ error, isRunning: false }),
   requestCancel: () => set({ isCancelling: true }),
   finishRun: () => set({ isRunning: false, progressPercent: 100, isCancelling: false }),
-  reset: () => set({ runId: null, sessionId: null, stages: initialStages(), progressPercent: 0, isRunning: false, isCancelling: false, error: null }),
+  reset: () =>
+    set({
+      runId: null,
+      sessionId: null,
+      stages: initialStages(),
+      progressPercent: 0,
+      isRunning: false,
+      isCancelling: false,
+      error: null,
+      currentPageId: null,
+      currentPageBlocks: [],
+    }),
+
+  setPageLayout: (pageId, pageIndex, totalPages, blocks, pageWidth, pageHeight) =>
+    set({ currentPageId: pageId, currentPageIndex: pageIndex, totalPages, currentPageBlocks: blocks, currentPageWidth: pageWidth, currentPageHeight: pageHeight }),
 }));

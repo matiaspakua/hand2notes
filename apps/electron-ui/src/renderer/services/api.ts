@@ -83,10 +83,11 @@ export const api = {
   uploadPages: async (id: string, paths: string[]): Promise<Page[]> => {
     const form = new FormData();
     for (const filePath of paths) {
-      const response = await fetch(`file://${filePath}`);
-      const blob = await response.blob();
+      const buffer = await window.h2n.readFile(filePath);
       const filename = filePath.split('/').pop() ?? 'image.jpg';
-      form.append('files', new File([blob], filename));
+      // Buffer from IPC may have a SharedArrayBuffer backing; copy into a plain ArrayBuffer.
+      const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+      form.append('files', new File([arrayBuffer], filename));
     }
     const base = await baseHttp();
     const res = await fetch(`${base}/sessions/${id}/pages`, { method: 'POST', body: form });
@@ -98,10 +99,9 @@ export const api = {
   startProcessing: (id: string) =>
     request<{ run_id: string; session_id: string; message: string }>('POST', `/sessions/${id}/process`),
 
-  openProgressSocket: (id: string): WebSocket => {
-    // Port may not be resolved yet; use cached value synchronously
-    if (cachedPort == null) throw new Error('Backend port not resolved yet');
-    return new WebSocket(`ws://127.0.0.1:${cachedPort}${API_PREFIX}/sessions/${id}/progress`);
+  openProgressSocket: async (id: string): Promise<WebSocket> => {
+    const port = await resolvePort();
+    return new WebSocket(`ws://127.0.0.1:${port}${API_PREFIX}/sessions/${id}/progress`);
   },
 
   process: (id: string, stages?: PipelineStage[], options?: Record<string, unknown>) =>
@@ -156,7 +156,7 @@ export const api = {
 export async function connectProgress(
   sessionId: string,
   onEvent: (event: ProgressEvent) => void,
-): Promise<() => void> {
+): Promise<{ ws: WebSocket; close: () => void }> {
   const port = await resolvePort();
   const ws = new WebSocket(`ws://127.0.0.1:${port}${API_PREFIX}/sessions/${sessionId}/progress`);
   ws.onmessage = (msg) => {
@@ -166,7 +166,12 @@ export async function connectProgress(
       /* ignore malformed frames */
     }
   };
-  return () => ws.close();
+  return { ws, close: () => ws.close() };
+}
+
+/** Build the URL for serving a page image via the API (preprocessed or source). */
+export async function getPageImageUrl(sessionId: string, pageId: string): Promise<string> {
+  return `${await baseHttp()}/sessions/${sessionId}/pages/${pageId}/image`;
 }
 
 export { ApiError };
