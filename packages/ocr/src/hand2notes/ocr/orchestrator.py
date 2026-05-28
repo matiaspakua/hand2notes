@@ -1,11 +1,11 @@
-"""OCR orchestrator: Docling for full-page text + TrOCR per-block fallback.
+"""OCR orchestrator: Surya OCR (primary) + TrOCR (fallback).
 
 Strategy:
-  1. Docling extracts structured text from the full image (fast, handles handwriting).
-  2. Distribute Docling text to layout blocks by spatial overlap.
-  3. For blocks with no Docling match, run trocr_adapter (microsoft/trocr-large-handwritten).
-     TrOCR segments each block into lines and runs the handwriting model per line.
-  4. If TrOCR is unavailable, fall back to paddle_adapter (EasyOCR).
+  1. Surya DetectionPredictor finds text lines across the full page.
+  2. Surya RecognitionPredictor transcribes each line (best quality for handwriting).
+  3. Lines are assigned to Surya layout blocks by spatial IoU overlap.
+  4. Blocks with no Surya OCR coverage fall back to TrOCR line-segmentation.
+  5. Confidence threshold gates the review_flag for each block.
 """
 
 from pathlib import Path
@@ -13,85 +13,85 @@ from pathlib import Path
 import numpy as np
 from hand2notes.core_models.models import Block, Page
 
-from .docling_adapter import DoclingResult, convert_image as docling_convert
+from .surya_ocr_adapter import OcrLine, run_ocr_on_image, _SURYA_OCR_AVAILABLE
 from .trocr_adapter import _TROCR_AVAILABLE
 from .trocr_adapter import run_ocr as _trocr_ocr
 from .paddle_adapter import run_ocr as _paddle_ocr
 
+_DEFAULT_CONFIDENCE_THRESHOLD = 0.55
 
-def block_ocr(image: np.ndarray, crop_box=None, languages=None):
-    """Run per-block OCR: TrOCR (handwriting model) when available, else EasyOCR."""
+
+def _fallback_ocr(image: np.ndarray, crop_box=None, languages=None):
+    """Per-block fallback: TrOCR when available, else EasyOCR."""
     if _TROCR_AVAILABLE:
         return _trocr_ocr(image, crop_box=crop_box, languages=languages)
     return _paddle_ocr(image, crop_box=crop_box, languages=languages)
 
-_DEFAULT_CONFIDENCE_THRESHOLD = 0.65
+
+def _line_containment(bx: float, by: float, bw: float, bh: float,
+                       lx1: float, ly1: float, lx2: float, ly2: float) -> float:
+    """Fraction of a Surya line that falls within a layout block.
+
+    Returns overlap_area / line_area.  This is robust to large blocks that
+    would suppress a normal IoU score because the union is dominated by the
+    block's huge area.
+    """
+    ix1 = max(bx, lx1)
+    iy1 = max(by, ly1)
+    ix2 = min(bx + bw, lx2)
+    iy2 = min(by + bh, ly2)
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+    inter = (ix2 - ix1) * (iy2 - iy1)
+    line_area = max(1.0, (lx2 - lx1) * (ly2 - ly1))
+    return inter / line_area
+
+
+def _assign_surya_lines_to_blocks(
+    blocks: list[Block],
+    lines: list[OcrLine],
+    img_w: int,
+    img_h: int,
+) -> set:
+    """Assign OCR lines to the best-matching layout block by line containment.
+
+    A line is matched to the block that contains the largest fraction of the
+    line's bounding box area.  Returns block IDs that received at least one line.
+    """
+    matched: set = set()
+
+    for line in lines:
+        if not line.bbox or len(line.bbox) < 4:
+            continue
+        lx1, ly1, lx2, ly2 = line.bbox[0], line.bbox[1], line.bbox[2], line.bbox[3]
+
+        best_block: Block | None = None
+        best_score = 0.3  # minimum containment fraction to count as a match
+        for block in blocks:
+            score = _line_containment(
+                block.bbox.x, block.bbox.y, block.bbox.width, block.bbox.height,
+                lx1, ly1, lx2, ly2,
+            )
+            if score > best_score:
+                best_score = score
+                best_block = block
+
+        if best_block is not None:
+            prev = best_block.content or ""
+            new_text = line.text.strip()
+            best_block.content = (prev + "\n" + new_text).strip() if prev else new_text
+            best_block.confidence = max(best_block.confidence or 0.0, line.confidence)
+            matched.add(best_block.id)
+
+    return matched
 
 
 def _load_image(path: Path) -> np.ndarray:
     try:
         import cv2
-        img = cv2.imread(str(path))
-        return img
+        return cv2.imread(str(path))
     except ImportError:
         return np.zeros((100, 100, 3), dtype=np.uint8)
-
-
-def _overlap(bx: float, by: float, bw: float, bh: float,
-             ex: float, ey: float, ew: float, eh: float,
-             img_w: int, img_h: int) -> float:
-    """IoU-style overlap between a block bbox and a Docling element bbox.
-
-    Docling bbox coordinates are in the image coordinate system.
-    """
-    # Normalize Docling coords if they appear to be in PDF points (0-1 range not expected here)
-    x1 = max(bx, ex)
-    y1 = max(by, ey)
-    x2 = min(bx + bw, ex + ew)
-    y2 = min(by + bh, ey + eh)
-    if x2 <= x1 or y2 <= y1:
-        return 0.0
-    inter = (x2 - x1) * (y2 - y1)
-    union = bw * bh + ew * eh - inter
-    return inter / union if union > 0 else 0.0
-
-
-def _assign_docling_to_blocks(blocks: list[Block], docling: DoclingResult, img_w: int, img_h: int) -> set:
-    """Assign Docling element text to the best-matching layout block.
-
-    Returns the set of block IDs that received Docling text.
-    """
-    matched: set = set()
-    for elem in docling.blocks:
-        text = elem.get("text", "").strip()
-        if not text:
-            continue
-        bbox = elem.get("bbox")
-        if not bbox:
-            continue
-        # Docling bbox: {l, t, r, b} in image pixels (after Docling ≥ 2.x)
-        el = float(bbox.get("l", 0))
-        et = float(bbox.get("t", 0))
-        er = float(bbox.get("r", img_w))
-        eb = float(bbox.get("b", img_h))
-        ew, eh = er - el, eb - et
-
-        best_block: Block | None = None
-        best_iou = 0.1  # minimum threshold to assign
-        for block in blocks:
-            iou = _overlap(block.bbox.x, block.bbox.y, block.bbox.width, block.bbox.height,
-                           el, et, ew, eh, img_w, img_h)
-            if iou > best_iou:
-                best_iou = iou
-                best_block = block
-
-        if best_block is not None:
-            prev = best_block.content or ""
-            best_block.content = (prev + "\n" + text).strip() if prev else text
-            best_block.confidence = max(best_block.confidence or 0.0, 0.75)
-            matched.add(best_block.id)
-
-    return matched
 
 
 def run_ocr_on_page(
@@ -102,31 +102,28 @@ def run_ocr_on_page(
 ) -> list[Block]:
     """Run OCR across all text blocks on a page.
 
-    Returns the updated blocks list (mutates in place and returns for convenience).
+    Mutates blocks in place (sets content, confidence, review_flag).
+    Returns the updated blocks list for convenience.
     """
     langs = languages or ["es", "en"]
 
-    # Step 1: Docling for full-page extraction (primary path — best quality)
-    docling_result = docling_convert(image_path)
-
     full_image = _load_image(image_path)
-    h, w = full_image.shape[:2] if full_image is not None else (1, 1)
+    h, w = full_image.shape[:2] if full_image is not None and full_image.size > 0 else (1, 1)
 
-    if docling_result.success and docling_result.blocks:
-        matched_ids = _assign_docling_to_blocks(page.blocks, docling_result, w, h)
-    elif docling_result.success and docling_result.markdown:
-        # Docling ran but produced no per-element blocks: put all text in first block
-        matched_ids = set()
-        if page.blocks:
-            page.blocks[0].content = docling_result.markdown.strip()
-            page.blocks[0].confidence = 0.70
-            matched_ids.add(page.blocks[0].id)
+    # --- Primary: Surya full-page OCR ---
+    if _SURYA_OCR_AVAILABLE:
+        surya_result = run_ocr_on_image(image_path, languages=langs)
+        if surya_result.success and surya_result.lines:
+            matched_ids = _assign_surya_lines_to_blocks(page.blocks, surya_result.lines, w, h)
+        else:
+            matched_ids = set()
     else:
         matched_ids = set()
 
-    # Step 2: For blocks Docling didn't cover, run per-block OCR (PaddleOCR or EasyOCR)
+    # --- Fallback: per-block TrOCR / EasyOCR for blocks Surya missed ---
     for block in page.blocks:
-        if block.id in matched_ids and block.confidence and block.confidence >= confidence_threshold:
+        already_covered = block.id in matched_ids and (block.confidence or 0.0) >= confidence_threshold
+        if already_covered:
             block.review_flag = False
             continue
 
@@ -135,11 +132,12 @@ def run_ocr_on_page(
         bw = min(block.bbox.width, w - x)
         bh = min(block.bbox.height, h - y)
 
-        result = block_ocr(full_image, crop_box=(x, y, bw, bh), languages=langs)
-        if result.text:
-            prev = block.content or ""
-            block.content = (prev + "\n" + result.text).strip() if prev else result.text
-            block.confidence = max(block.confidence or 0.0, result.confidence)
+        if bw > 0 and bh > 0 and full_image is not None and full_image.size > 0:
+            result = _fallback_ocr(full_image, crop_box=(x, y, bw, bh), languages=langs)
+            if result.text:
+                prev = block.content or ""
+                block.content = (prev + "\n" + result.text).strip() if prev else result.text
+                block.confidence = max(block.confidence or 0.0, result.confidence)
 
         block.review_flag = (block.confidence or 0.0) < confidence_threshold
 
