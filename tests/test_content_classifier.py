@@ -109,7 +109,9 @@ class TestReconstructorQuality:
         assert "--" not in lines
         assert "·" not in lines
 
-    def test_arrow_normalised(self):
+    def test_arrow_preserved_verbatim(self):
+        # Arrow normalization is intentionally disabled — VLM output uses `-->` notation
+        # which must be preserved verbatim. Raw `->`  stays as-is.
         from hand2notes.markdown_export.reconstructor import _clean_line
         result = _clean_line("Strategy -> Execution")
-        assert "→" in result
+        assert result == "Strategy -> Execution"
