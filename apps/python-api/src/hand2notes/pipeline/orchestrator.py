@@ -8,8 +8,10 @@ optional async callback so callers (e.g. WebSocket router) can stream events.
 import asyncio
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
+from hand2notes.core_models.blocks import DiagramBlock
 from hand2notes.core_models.enums import PipelineStage, SessionStatus
 from hand2notes.core_models.models import Page, Session, VaultConfig
 from hand2notes.storage import run_logger
@@ -127,6 +129,20 @@ async def _stage_import(
     return {"pages_imported": float(len(pages))}
 
 
+_MAX_PREPROCESS_WIDTH = 1600  # Limit processed images for OCR/layout speed
+
+
+def _resize_for_processing(src: Path, dst: Path, max_width: int = _MAX_PREPROCESS_WIDTH) -> None:
+    """Resize an image so its width does not exceed max_width, preserving aspect ratio."""
+    from PIL import Image as PILImage
+    img = PILImage.open(src)
+    w, h = img.size
+    if w > max_width:
+        new_h = int(h * max_width / w)
+        img = img.resize((max_width, new_h), PILImage.LANCZOS)
+    img.save(dst, "JPEG", quality=92)
+
+
 async def _stage_preprocess(
     session: Session, pages: list[Page], config: VaultConfig
 ) -> dict[str, float]:
@@ -141,10 +157,19 @@ async def _stage_preprocess(
         deskewed_path = work_dir / f"{page.id}_deskewed.jpg"
         result = deskew_file(page.source_path, deskewed_path)
 
-        denoised_path = work_dir / f"{page.id}_processed.jpg"
+        denoised_path = work_dir / f"{page.id}_denoised.jpg"
         denoise_file(deskewed_path, denoised_path)
 
-        page.preprocessed_path = denoised_path
+        # Resize to max 1600px wide so downstream ML runs at practical speed
+        processed_path = work_dir / f"{page.id}_processed.jpg"
+        _resize_for_processing(denoised_path, processed_path)
+
+        page.preprocessed_path = processed_path
+        # Update page dimensions to match the resized image
+        from PIL import Image as PILImage
+        with PILImage.open(processed_path) as img:
+            page.width_px, page.height_px = img.size
+
         page.pipeline_stage = PipelineStage.PREPROCESS
         if result.was_corrected:
             corrected += 1

@@ -14,23 +14,34 @@ from hand2notes.core_models.enums import BlockType, DiagramType
 from hand2notes.core_models.models import Block, BoundingBox, Page
 
 try:
-    from surya.detection import batch_text_detection
-    from surya.model.detection.model import load_model, load_processor
+    from surya.layout import LayoutPredictor as _LayoutPredictor
 
     _SURYA_AVAILABLE = True
 except ImportError:
     _SURYA_AVAILABLE = False
 
+# Surya ≥0.10 label map (ID_TO_LABEL values)
 _BLOCK_TYPE_MAP: dict[str, BlockType] = {
-    "Title": BlockType.TITLE,
-    "Section-header": BlockType.HEADING,
     "Text": BlockType.PARAGRAPH,
-    "List-item": BlockType.BULLET_LIST,
-    "Table": BlockType.TABLE,
-    "Figure": BlockType.DIAGRAM,
+    "TextInlineMath": BlockType.PARAGRAPH,
+    "Handwriting": BlockType.PARAGRAPH,
+    "Code": BlockType.PARAGRAPH,
+    "SectionHeader": BlockType.HEADING,
     "Caption": BlockType.PARAGRAPH,
     "Footnote": BlockType.MARGINAL_NOTE,
-    "Formula": BlockType.FORMULA,
+    "Equation": BlockType.FORMULA,
+    "ListItem": BlockType.BULLET_LIST,
+    "PageFooter": BlockType.MARGINAL_NOTE,
+    "PageHeader": BlockType.HEADING,
+    "Picture": BlockType.DIAGRAM,
+    "Figure": BlockType.DIAGRAM,
+    "Table": BlockType.TABLE,
+    "Form": BlockType.TABLE,
+    "TableOfContents": BlockType.PARAGRAPH,
+    # Legacy labels from older Surya versions
+    "Title": BlockType.TITLE,
+    "Section-header": BlockType.HEADING,
+    "List-item": BlockType.BULLET_LIST,
 }
 
 
@@ -52,29 +63,32 @@ def detect_layout(image_path: Path, page: Page) -> list[Block]:
 def _detect_with_surya(image_path: Path, page: Page) -> list[Block]:
     from PIL import Image as PILImage
 
-    model = load_model()
-    processor = load_processor()
-
+    predictor = _LayoutPredictor()
     pil_image = PILImage.open(image_path).convert("RGB")
-    predictions = batch_text_detection([pil_image], model, processor)
+    results = predictor([pil_image])
 
     blocks: list[Block] = []
-    for i, text_line in enumerate(predictions[0].bboxes):
-        bbox = text_line.bbox  # [x1, y1, x2, y2]
+    for i, layout_box in enumerate(results[0].bboxes):
+        bbox = layout_box.bbox  # [x1, y1, x2, y2]
         x1, y1, x2, y2 = bbox
-        label = getattr(text_line, "label", "Text")
+        label = getattr(layout_box, "label", "Text")
         block_type = _surya_label_to_block_type(label)
+        # Clamp coordinates to image dimensions
+        x1c = max(0, int(x1))
+        y1c = max(0, int(y1))
+        x2c = min(page.width_px, int(x2))
+        y2c = min(page.height_px, int(y2))
         common = dict(
             page_id=page.id,
             block_type=block_type,
             reading_order=i,
             bbox=BoundingBox(
-                x=int(x1),
-                y=int(y1),
-                width=int(x2 - x1),
-                height=int(y2 - y1),
+                x=x1c,
+                y=y1c,
+                width=max(1, x2c - x1c),
+                height=max(1, y2c - y1c),
             ),
-            confidence=float(getattr(text_line, "confidence", 0.8)),
+            confidence=float(getattr(layout_box, "confidence", 0.8)),
         )
         if block_type == BlockType.DIAGRAM:
             # crop_path will be set by the crop_saver in the detect_diagrams stage
