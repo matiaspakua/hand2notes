@@ -1,9 +1,11 @@
-"""OCR orchestrator: Docling for full-page text + per-block OCR fallback.
+"""OCR orchestrator: Docling for full-page text + TrOCR per-block fallback.
 
 Strategy:
   1. Docling extracts structured text from the full image (fast, handles handwriting).
   2. Distribute Docling text to layout blocks by spatial overlap.
-  3. For blocks with no Docling match, run paddle_adapter (PaddleOCR or EasyOCR).
+  3. For blocks with no Docling match, run trocr_adapter (microsoft/trocr-large-handwritten).
+     TrOCR segments each block into lines and runs the handwriting model per line.
+  4. If TrOCR is unavailable, fall back to paddle_adapter (EasyOCR).
 """
 
 from pathlib import Path
@@ -12,7 +14,16 @@ import numpy as np
 from hand2notes.core_models.models import Block, Page
 
 from .docling_adapter import DoclingResult, convert_image as docling_convert
-from .paddle_adapter import run_ocr as block_ocr
+from .trocr_adapter import _TROCR_AVAILABLE
+from .trocr_adapter import run_ocr as _trocr_ocr
+from .paddle_adapter import run_ocr as _paddle_ocr
+
+
+def block_ocr(image: np.ndarray, crop_box=None, languages=None):
+    """Run per-block OCR: TrOCR (handwriting model) when available, else EasyOCR."""
+    if _TROCR_AVAILABLE:
+        return _trocr_ocr(image, crop_box=crop_box, languages=languages)
+    return _paddle_ocr(image, crop_box=crop_box, languages=languages)
 
 _DEFAULT_CONFIDENCE_THRESHOLD = 0.65
 
