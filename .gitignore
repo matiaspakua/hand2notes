@@ -226,6 +226,8 @@ dist-electron/
 *.tsbuildinfo
 .vite/
 .turbo/
+test-results/
+playwright-report/
 
 # Local ML models (not committed — downloaded per environment)
 models/
