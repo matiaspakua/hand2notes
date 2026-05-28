@@ -12,7 +12,7 @@ interface TablePreviewProps {
 }
 
 export const TablePreview: React.FC<TablePreviewProps> = ({
-  blockId,
+  blockId: _blockId,
   headers,
   rows,
   caption,

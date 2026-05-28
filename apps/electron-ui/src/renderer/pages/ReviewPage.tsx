@@ -17,7 +17,7 @@ interface ReviewPageProps {
 export const ReviewPage: React.FC<ReviewPageProps> = ({
   sessionId,
   pageId,
-  totalPages = 1,
+  totalPages: _totalPages = 1,
   onNext,
   onExport,
 }) => {

@@ -10,13 +10,15 @@ interface BlockData {
   reading_order: number;
 }
 
+import type { DiagramDecision } from '../components/DiagramPreview';
+
 interface DiagramPreviewData {
   block_id: string;
   diagram_type: string;
   crop_path: string | null;
   generated_source_path: string | null;
   reconstruction_confidence: number;
-  review_decision: string;
+  review_decision: DiagramDecision;
 }
 
 interface PageReviewData {

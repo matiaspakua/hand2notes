@@ -230,3 +230,4 @@ dist-electron/
 # Local ML models (not committed — downloaded per environment)
 models/
 *.gguf
+outputs/
