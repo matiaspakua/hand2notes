@@ -11,6 +11,8 @@ Improvements over original:
 
 from __future__ import annotations
 
+import re
+
 from hand2notes.core_models.blocks import DiagramBlock, TableBlock
 from hand2notes.core_models.enums import BlockType, DiagramDecision, FallbackType
 from hand2notes.core_models.models import Block, Page, Session, VaultConfig
@@ -25,28 +27,31 @@ from .reconstructor import _block_to_markdown, _lines_clean, reconstruct
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_diagram_block(block: DiagramBlock, vault_root) -> str:
+    from pathlib import Path as _Path
+
     decision = block.review_decision
     if decision == DiagramDecision.REJECTED:
         crop = block.crop_path
         if crop and vault_root:
             try:
-                from pathlib import Path
-                rel = Path(crop).relative_to(vault_root)
+                rel = _Path(crop).relative_to(vault_root)
                 return f"![[{rel}]]"
             except ValueError:
                 pass
         return f"![diagram crop]({crop})" if crop else ""
 
     if block.generated_source_path:
-        src = block.generated_source_path
+        # Prefer the PNG export for inline rendering (works natively in Obsidian);
+        # fall back to the source file (requires a PlantUML/draw.io Obsidian plugin).
+        png_path = getattr(block, "generated_png_path", None)
+        embed_path = _Path(png_path) if png_path and _Path(png_path).exists() else _Path(block.generated_source_path)
         if vault_root:
             try:
-                from pathlib import Path
-                rel = Path(src).relative_to(vault_root)
+                rel = embed_path.relative_to(vault_root)
                 return f"![[{rel}]]"
             except ValueError:
                 pass
-        return f"![[{src.name}]]"
+        return f"![[{embed_path.name}]]"
 
     crop = block.crop_path
     return f"![diagram crop]({crop})" if crop else ""
@@ -76,8 +81,8 @@ def _render_single_block(block: Block, vault_root=None) -> str:
     if isinstance(block, TableBlock):
         return _render_table_block(block)
 
-    text = _block_to_markdown(block).strip()
-    if not text:
+    text = _block_to_markdown(block).rstrip()
+    if not text.strip():
         return ""
 
     # Apply URL formatting
@@ -168,27 +173,55 @@ def _render_page(
     sorted_blocks = sorted(merged_blocks, key=lambda b: b.reading_order)
 
     # ── Step 4: decide page header ────────────────────────────────────────────
-    page_parts: list[str] = []
-
     has_title = any(b.block_type in (BlockType.TITLE, BlockType.HEADING)
                     for b in sorted_blocks)
 
-    if multi_page:
-        # Only emit page header when the page has no detected title
-        if not has_title:
-            page_parts.append(f"## — Página {page.sequence} —")
+    header_parts: list[str] = []
+    if multi_page and not has_title:
+        header_parts.append(f"## — Página {page.sequence} —")
 
     # ── Step 5: render blocks, grouping consecutive lists ────────────────────
     grouped = _group_consecutive_lists(sorted_blocks)
+    rendered_parts: list[tuple[str, str]] = []  # (text, block_type_value)
     for item in grouped:
         if isinstance(item, list):
             rendered = _render_list_group(item)
+            bt = item[0].block_type.value if item else "paragraph"
         else:
             rendered = _render_single_block(item, vault_root)
+            bt = item.block_type.value
         if rendered and rendered.strip():
-            page_parts.append(rendered.strip())
+            # Preserve leading whitespace for pre-formatted blocks (structural markers);
+            # strip only trailing whitespace so block separators stay clean.
+            normalised = rendered.rstrip()
+            rendered_parts.append((normalised, bt))
 
-    return "\n\n".join(page_parts)
+    # Join consecutive TITLE blocks with a single newline (no blank line between them)
+    def is_markdown_table(text: str) -> bool:
+        lines = text.splitlines()
+        if not lines:
+            return False
+        first_line = lines[0].strip()
+        if not first_line.startswith("|"):
+            return False
+        for line in lines[1:3]:
+            stripped = line.strip()
+            if re.match(r"^\|[\s:._-]*\|", stripped) and ("-" in stripped or ":" in stripped):
+                return True
+        return False
+
+    result_parts: list[str] = list(header_parts)
+    for i, (text, bt) in enumerate(rendered_parts):
+        if result_parts and text and not is_markdown_table(text) and \
+                (text.startswith((" ", "\t")) or text.startswith("|")):
+            result_parts[-1] = result_parts[-1] + "\n" + text
+        elif (i > 0 and bt == BlockType.TITLE.value
+                and rendered_parts[i - 1][1] == BlockType.TITLE.value):
+            result_parts[-1] = result_parts[-1] + "\n" + text
+        else:
+            result_parts.append(text)
+
+    return "\n\n".join(result_parts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

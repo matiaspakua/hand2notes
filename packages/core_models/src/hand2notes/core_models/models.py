@@ -152,7 +152,19 @@ class VaultConfig(BaseModel):
     front_matter_fields: dict[str, str] = Field(default_factory=dict)
     vlm_runtime: VLMRuntime = VLMRuntime.OLLAMA
     vlm_model: str = "qwen2.5vl:7b"
+    vlm_transcription_model: str = Field(
+        default="gemma4:e4b",
+        description="Ollama vision model used for full-page handwriting transcription",
+    )
+    vlm_transcription_enabled: bool = Field(
+        default=True,
+        description="Use VLM full-page transcription as primary OCR (requires Ollama)",
+    )
     ocr_languages: list[str] = Field(default_factory=lambda: ["es", "en"])
+    include_front_matter: bool = Field(
+        default=True,
+        description="Include YAML front matter in exported Markdown notes",
+    )
     confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
     spell_correction_enabled: bool = Field(
         default=True,
