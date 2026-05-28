@@ -11,8 +11,8 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    const maxAttempts = 10;
-    const delayMs = 300;
+    const maxAttempts = 60;   // 60 × 1000 ms = 60 s — covers uv package builds on first run
+    const delayMs = 1000;
 
     const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

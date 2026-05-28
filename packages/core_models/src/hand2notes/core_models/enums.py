@@ -8,6 +8,7 @@ class PipelineStage(StrEnum):
     PREPROCESS = "preprocess"
     DETECT_LAYOUT = "detect_layout"
     RECOGNIZE_TEXT = "recognize_text"
+    TEXT_CORRECTION = "text_correction"
     RECONSTRUCT_STRUCTURE = "reconstruct_structure"
     DETECT_DIAGRAMS = "detect_diagrams"
     GENERATE_OUTPUT = "generate_output"

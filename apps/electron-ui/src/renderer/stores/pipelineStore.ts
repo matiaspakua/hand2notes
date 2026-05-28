@@ -32,6 +32,7 @@ const PIPELINE_STAGES = [
   'preprocess',
   'detect_layout',
   'recognize_text',
+  'text_correction',
   'reconstruct_structure',
   'generate_output',
 ];

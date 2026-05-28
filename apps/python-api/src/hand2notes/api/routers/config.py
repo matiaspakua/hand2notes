@@ -24,6 +24,8 @@ class ConfigPatch(BaseModel):
     vlm_runtime: str | None = None
     vlm_model: str | None = None
     confidence_threshold: float | None = None
+    spell_correction_enabled: bool | None = None
+    spell_correction_languages: list[str] | None = None
 
 
 @router.get("", response_model=dict)
@@ -68,6 +70,10 @@ async def patch_config(body: ConfigPatch) -> dict:
         config.vlm_model = update_data["vlm_model"]
     if "confidence_threshold" in update_data:
         config.confidence_threshold = update_data["confidence_threshold"]
+    if "spell_correction_enabled" in update_data:
+        config.spell_correction_enabled = update_data["spell_correction_enabled"]
+    if "spell_correction_languages" in update_data:
+        config.spell_correction_languages = update_data["spell_correction_languages"]
 
     save_config(config)
     return config.model_dump(mode="json")

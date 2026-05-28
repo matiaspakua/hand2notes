@@ -323,7 +323,9 @@ async def patch_block(
         "block_id": str(block.id),
         "block_type": block.block_type.value,
         "content": block.content,
+        "auto_corrected_content": block.auto_corrected_content,
         "corrected_content": block.corrected_content,
+        "effective_content": block.effective_content,
         "review_flag": block.review_flag,
         "confidence": block.confidence,
     }

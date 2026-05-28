@@ -19,6 +19,7 @@ hand2notes-diagrams = { workspace = true }
 hand2notes-markdown-export = { workspace = true }
 hand2notes-review = { workspace = true }
 hand2notes-storage = { workspace = true }
+hand2notes-text-correction = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -37,4 +38,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests", "apps/python-api/tests"]
+testpaths = ["tests", "apps/python-api/tests", "packages/text_correction/tests", "packages/layout/tests", "packages/markdown_export/tests"]

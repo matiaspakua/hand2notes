@@ -109,7 +109,7 @@ test.describe('transformation_digital conversion', () => {
 
     // ── Import screen ────────────────────────────────────────────────────────
     await expect(page.locator('h1')).toContainText('Import Notebook Pages', {
-      timeout: 90_000,   // backend startup + model initialisation
+      timeout: 120_000,  // backend startup + uv package install on first run (~60s)
     });
 
     await page.fill('input[placeholder*="CS101"]',          'Transformation Digital');

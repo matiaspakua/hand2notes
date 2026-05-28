@@ -110,6 +110,23 @@ Before final export, the application presents a review screen showing the origin
 
 ---
 
+### User Story 8 — Spell Correction and Legible Output (Priority: P1)
+
+After OCR, extracted text is post-processed against Spanish and English dictionaries. Malformed or garbled words produced by the OCR engine are automatically replaced with the closest valid dictionary match. Business and technical terminology specific to the note domain is preserved without alteration. The final Markdown output always contains legible, human-readable text.
+
+**Why this priority**: Raw OCR output on handwritten text contains significant noise: character substitutions, partial word reads, and made-up strings. Without post-correction, the exported note is often unreadable and requires extensive manual review.
+
+**Independent Test**: Can be tested by creating a page with known OCR-error words (e.g., "Fransformación", "emprersa", "estrategi"), running the pipeline, and verifying the exported Markdown note contains the correctly spelled versions.
+
+**Acceptance Scenarios**:
+
+1. **Given** a processed page where OCR produced the word "Fransformación", **When** the text correction stage runs, **Then** the word is replaced with "Transformación" in the exported note, and the original OCR word is stored for review.
+2. **Given** a note containing the abbreviation "RRLL" and the domain term "estrategia", **When** spell correction runs, **Then** both are preserved unchanged.
+3. **Given** a processed page where OCR produced the word "busines", **When** the text correction stage runs for English, **Then** the word is corrected to "business" in the output.
+4. **Given** a user who manually corrects a block to "Transformación Digital" in the review screen, **When** the note is exported, **Then** the user's manual correction takes precedence over the automatic spell correction.
+
+---
+
 ### Edge Cases
 
 - What happens when an image is completely unreadable (blurry, dark, extreme distortion)?
@@ -150,6 +167,10 @@ Before final export, the application presents a review screen showing the origin
 - **FR-023**: The system MUST support grouping pages into a named note session, with one Markdown file per session or one per page as a user-selectable option.
 - **FR-024**: The system MUST show progress indicators, stage labels, and cancellation support for all long-running pipeline operations.
 - **FR-025**: The system MUST emit structured logs and structured error details for all pipeline stages.
+- **FR-026**: The system MUST post-process all OCR text through a Spanish and English spell-correction dictionary to produce legible output. Malformed or OCR-garbled words MUST be replaced with the closest valid dictionary match, subject to a maximum edit distance of 2.
+- **FR-027**: The system MUST preserve domain-specific vocabulary (business strategy, digital transformation, technology terms, abbreviations) and ALL-CAPS tokens without alteration during spell correction.
+- **FR-028**: The effective text used on export MUST follow the priority chain: user-manual correction > automatic spell correction > raw OCR output. No correction layer may destroy a higher-priority override.
+- **FR-029**: Block-level correction metadata (original raw text, auto-corrected text, user correction) MUST be preserved and accessible in the review API so the user can audit every automatic change.
 
 ### Key Entities
 

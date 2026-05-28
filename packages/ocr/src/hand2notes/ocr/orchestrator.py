@@ -114,7 +114,19 @@ def run_ocr_on_page(
     if _SURYA_OCR_AVAILABLE:
         surya_result = run_ocr_on_image(image_path, languages=langs)
         if surya_result.success and surya_result.lines:
-            matched_ids = _assign_surya_lines_to_blocks(page.blocks, surya_result.lines, w, h)
+            # If layout gave us too few large blocks, rebuild structure from OCR lines
+            coarse_layout = _is_coarse_layout(page.blocks, h)
+            if coarse_layout:
+                from .line_grouper import rebuild_blocks_from_lines
+                new_blocks = rebuild_blocks_from_lines(
+                    surya_result.lines, page.id, w, h, existing_blocks=page.blocks
+                )
+                page.blocks = new_blocks
+                for block in page.blocks:
+                    block.review_flag = (block.confidence or 0.0) < confidence_threshold
+                return page.blocks
+            else:
+                matched_ids = _assign_surya_lines_to_blocks(page.blocks, surya_result.lines, w, h)
         else:
             matched_ids = set()
     else:
@@ -142,3 +154,14 @@ def run_ocr_on_page(
         block.review_flag = (block.confidence or 0.0) < confidence_threshold
 
     return page.blocks
+
+
+def _is_coarse_layout(blocks: list[Block], page_height: int) -> bool:
+    """Return True when layout detection produced too-large blocks for structure inference."""
+    from hand2notes.core_models.enums import BlockType as BT
+    text_blocks = [b for b in blocks if b.block_type not in (BT.DIAGRAM, BT.TABLE)]
+    if not text_blocks:
+        return False
+    avg_h = sum(b.bbox.height for b in text_blocks) / len(text_blocks)
+    # If average text-block height > 50% of page height → layout is too coarse
+    return avg_h > page_height * 0.3 or len(text_blocks) <= 2

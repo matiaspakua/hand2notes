@@ -59,6 +59,7 @@ async def run_pipeline(
         (PipelineStage.PREPROCESS, _stage_preprocess),
         (PipelineStage.DETECT_LAYOUT, _stage_detect_layout),
         (PipelineStage.RECOGNIZE_TEXT, _stage_recognize_text),
+        (PipelineStage.TEXT_CORRECTION, _stage_text_correction),
         (PipelineStage.RECONSTRUCT_STRUCTURE, _stage_reconstruct_structure),
         (PipelineStage.DETECT_DIAGRAMS, _stage_detect_diagrams),
         (PipelineStage.GENERATE_OUTPUT, _stage_generate_output),
@@ -255,6 +256,32 @@ def _run_visual_semantics_for_page(page: Page) -> int:
     except Exception as exc:
         log.warning("Visual semantics detection failed for page %s: %s", page.id, exc)
     return urls_found
+
+
+async def _stage_text_correction(
+    session: Session, pages: list[Page], config: VaultConfig
+) -> dict[str, float]:
+    """Post-OCR spell correction: Spanish + English dictionary lookup."""
+    if not config.spell_correction_enabled:
+        log.info("Spell correction disabled by config — skipping")
+        return {"blocks_checked": 0.0, "blocks_corrected": 0.0, "words_corrected": 0.0}
+
+    from hand2notes.text_correction.postprocessor import correct_page
+
+    total_checked = 0
+    total_corrected = 0
+    total_words = 0
+    for page in pages:
+        metrics = correct_page(page, languages=config.spell_correction_languages)
+        total_checked += metrics["blocks_checked"]
+        total_corrected += metrics["blocks_corrected"]
+        total_words += metrics["words_corrected"]
+
+    return {
+        "blocks_checked": float(total_checked),
+        "blocks_corrected": float(total_corrected),
+        "words_corrected": float(total_words),
+    }
 
 
 async def _stage_reconstruct_structure(

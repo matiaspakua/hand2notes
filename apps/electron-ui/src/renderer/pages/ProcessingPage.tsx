@@ -7,6 +7,7 @@ const STAGE_LABELS: Record<string, string> = {
   preprocess: 'Preprocessing (deskew & denoise)',
   detect_layout: 'Detecting layout regions',
   recognize_text: 'Recognizing text (OCR)',
+  text_correction: 'Correcting text (ES/EN dictionary)',
   reconstruct_structure: 'Reconstructing structure',
   generate_output: 'Generating Markdown output',
 };
