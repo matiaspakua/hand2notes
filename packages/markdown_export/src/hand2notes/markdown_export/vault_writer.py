@@ -119,6 +119,21 @@ def _write_diagram_artifacts(
                     vault_relative_path=vr,
                 ))
 
+            # Copy companion PNG if the CLI export succeeded
+            png_path = getattr(block, "generated_png_path", None)
+            if png_path and Path(png_path).exists():
+                dest_png = diagrams_dir / Path(png_path).name
+                if Path(png_path) != dest_png:
+                    shutil.copy2(png_path, dest_png)
+                vr_png = str(dest_png.relative_to(config.vault_root))
+                artifacts.append(ExportArtifact(
+                    session_id=session.id,
+                    page_id=page.id,
+                    artifact_type=ArtifactType.IMAGE_ASSET,
+                    file_path=dest_png,
+                    vault_relative_path=vr_png,
+                ))
+
     # Copy table fallback files (CSV and image crops)
     if pages:
         for page in pages:

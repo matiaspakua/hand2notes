@@ -6,6 +6,8 @@ const api = {
   getApiPort: (): Promise<number | null> => ipcRenderer.invoke('api:get-port'),
   /** Open the native file picker; returns selected absolute image paths. */
   openImageFiles: (): Promise<string[]> => ipcRenderer.invoke('dialog:open-files'),
+  /** Read a local file by absolute path; returns a Buffer (Uint8Array in renderer). */
+  readFile: (filePath: string): Promise<Buffer> => ipcRenderer.invoke('fs:read-file', filePath),
 };
 
 contextBridge.exposeInMainWorld('h2n', api);

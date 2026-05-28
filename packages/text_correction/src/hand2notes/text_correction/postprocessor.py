@@ -46,6 +46,11 @@ def correct_page(
         raw = block.content
         if not raw or not raw.strip():
             continue
+        # Skip correction for VLM-transcribed blocks (confidence >= 0.9).
+        # The VLM already produces high-quality structured text; spell correction
+        # degrades it by replacing correctly-written Spanish with English cognates.
+        if (block.confidence or 0.0) >= 0.9:
+            continue
 
         blocks_checked += 1
         result = checker.correct_text(raw)

@@ -22,7 +22,7 @@ _PROBLEM_CONTENT_TYPE = "application/problem+json"
 
 
 def configure_logging(level: int = logging.INFO) -> None:
-    """Emit single-line JSON logs to stdout."""
+    """Emit single-line JSON logs to stdout for all hand2notes.* loggers."""
     if logger.handlers:
         return
     handler = logging.StreamHandler(sys.stdout)
@@ -30,6 +30,9 @@ def configure_logging(level: int = logging.INFO) -> None:
     logger.addHandler(handler)
     logger.setLevel(level)
     logger.propagate = False
+    # Suppress uvicorn access noise — our RequestLoggingMiddleware already covers it
+    logging.getLogger("uvicorn.access").propagate = False
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
 class _JsonFormatter(logging.Formatter):

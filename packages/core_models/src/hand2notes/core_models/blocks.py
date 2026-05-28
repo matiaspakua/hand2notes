@@ -68,6 +68,9 @@ class DiagramBlock(Block):
         default=None, description="PlantUML / draw.io / Mermaid output file"
     )
     generated_format: DiagramFormat | None = None
+    generated_png_path: Path | None = Field(
+        default=None, description="PNG export of the generated source — embedded in Markdown"
+    )
     crop_path: Path = Field(description="Original crop — always preserved")
     reconstruction_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     review_decision: DiagramDecision = DiagramDecision.PENDING

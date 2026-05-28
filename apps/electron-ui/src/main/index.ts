@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
@@ -58,6 +59,10 @@ async function createWindow(): Promise<void> {
 
 app.whenReady().then(async () => {
   ipcMain.handle('api:get-port', () => apiPort);
+  ipcMain.handle('fs:read-file', async (_event, filePath: string) => {
+    const buf = await readFile(filePath);
+    return buf;
+  });
   ipcMain.handle('dialog:open-files', async () => {
     const result = await dialog.showOpenDialog({
       title: 'Select notebook page images',

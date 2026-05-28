@@ -69,6 +69,11 @@ async def start_processing(session_id: UUID) -> ProcessResponse:
     cancel_event = asyncio.Event()
     run_id = str(session.id) + "-run"
 
+    log.info(
+        "Pipeline run starting: session=%s run_id=%s page_count=%d vault_root=%s",
+        session_id, run_id, len(pages), config.vault_root,
+    )
+
     def on_progress(event: dict[str, Any]) -> None:
         queues = _progress_queues.get(session_id, [])
         for q in queues:
@@ -84,16 +89,21 @@ async def start_processing(session_id: UUID) -> ProcessResponse:
                 on_progress=on_progress,
                 cancelled=cancel_event,
             )
+            log.info("Pipeline run completed: session=%s run_id=%s", session_id, run_id)
         except PipelineError as exc:
+            log.error("Pipeline stage failed: session=%s run_id=%s error=%s", session_id, run_id, exc)
             on_progress({"event": "run_failed", "error": str(exc)})
         except asyncio.CancelledError:
+            log.info("Pipeline run cancelled: session=%s run_id=%s", session_id, run_id)
             on_progress({"event": "run_cancelled"})
-        except Exception as exc:  # never let the UI hang on an unexpected error
-            log.exception("Pipeline run crashed")
+        except Exception as exc:
+            log.exception(
+                "Pipeline run crashed unexpectedly: session=%s run_id=%s error=%s: %s",
+                session_id, run_id, type(exc).__name__, exc,
+            )
             on_progress({"event": "run_failed", "error": f"{type(exc).__name__}: {exc}"})
         finally:
             _active_runs.pop(session_id, None)
-            # Signal all progress WebSockets to close
             for q in _progress_queues.get(session_id, []):
                 q.put_nowait({"event": "__done__"})
 
@@ -110,6 +120,7 @@ async def cancel_run(session_id: UUID, run_id: str) -> dict:
         raise HTTPException(status_code=404, detail="No active run for this session")
     task, cancel_event = entry
     cancel_event.set()
+    log.info("Pipeline cancellation requested: session=%s run_id=%s", session_id, run_id)
     return {"message": "Cancellation requested"}
 
 
@@ -131,6 +142,7 @@ async def get_run_status(session_id: UUID, run_id: str) -> dict:
 async def progress_websocket(websocket: WebSocket, session_id: UUID) -> None:
     """Stream pipeline progress events as JSON frames over WebSocket."""
     await websocket.accept()
+    log.info("Progress WebSocket connected: session=%s", session_id)
 
     queue: asyncio.Queue = asyncio.Queue()
     _progress_queues.setdefault(session_id, []).append(queue)
@@ -142,11 +154,12 @@ async def progress_websocket(websocket: WebSocket, session_id: UUID) -> None:
                 break
             await websocket.send_text(json.dumps(event))
     except WebSocketDisconnect:
-        pass
+        log.info("Progress WebSocket disconnected by client: session=%s", session_id)
     finally:
         queues = _progress_queues.get(session_id, [])
         if queue in queues:
             queues.remove(queue)
+        log.debug("Progress WebSocket cleaned up: session=%s remaining=%d", session_id, len(queues))
 
 
 # ---------------------------------------------------------------------------
