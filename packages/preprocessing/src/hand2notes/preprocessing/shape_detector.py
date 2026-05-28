@@ -61,21 +61,29 @@ def _detect_with_opencv(image_path: Path) -> list[dict]:
             results.append({"shape_type": "underline", "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)}})
             continue
 
-        # Try circle/ellipse fitting
+        # Try circle/ellipse fitting.
+        # Skip ellipses covering >15% of the page — those are page outlines.
         if len(cnt) >= 5:
             ellipse = cv2.fitEllipse(cnt)
             (_, _), (ma, mi), _ = ellipse
-            if mi > 0 and (ma / mi) < 1.5 and area > 1000:
+            rect_area_circ = w * h
+            page_fraction_circ = rect_area_circ / max(1, img_w * img_h)
+            if (mi > 0 and (ma / mi) < 1.5 and area > 1000
+                    and page_fraction_circ < 0.15):
                 results.append({"shape_type": "circle", "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)}})
                 continue
 
-        # Box: roughly rectangular with reasonable area
+        # Box: roughly rectangular with reasonable area.
+        # Skip boxes covering >15% of the page — those are page outlines or large
+        # handwriting regions, not deliberate annotation boxes.
         hull = cv2.convexHull(cnt)
         hull_area = cv2.contourArea(hull)
         if hull_area > 0:
             solidity = area / hull_area
             rect_area = w * h
-            if rect_area > 0 and (area / rect_area) > 0.6 and solidity > 0.8 and 0.3 < aspect < 10:
+            page_fraction = rect_area / max(1, img_w * img_h)
+            if (rect_area > 0 and (area / rect_area) > 0.6 and solidity > 0.8
+                    and 0.3 < aspect < 10 and page_fraction < 0.15):
                 results.append({"shape_type": "box", "bbox": {"x": int(x), "y": int(y), "width": int(w), "height": int(h)}})
 
     return results

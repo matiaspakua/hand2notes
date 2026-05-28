@@ -110,6 +110,10 @@ def render_note(
 
     for page in sorted(pages, key=lambda p: p.sequence):
         page_parts: list[str] = []
+
+        # Add a page heading so multi-page sessions have clear navigation
+        page_parts.append(f"## Página {page.sequence}")
+
         for block in sorted(page.blocks, key=lambda b: b.reading_order):
             if isinstance(block, DiagramBlock):
                 rendered = _render_diagram_block(block, vault_root)
@@ -125,7 +129,7 @@ def render_note(
                     text = _apply_block_semantics(text, block)
                     if text:
                         page_parts.append(text)
-        if page_parts:
+        if len(page_parts) > 1:  # more than just the heading
             sections.append("\n\n".join(page_parts))
 
     body = "\n\n---\n\n".join(sections)
