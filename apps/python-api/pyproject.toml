@@ -20,6 +20,7 @@ dependencies = [
     "hand2notes-diagrams",
     "hand2notes-markdown-export",
     "hand2notes-review",
+    "hand2notes-text-correction",
 ]
 
 [build-system]

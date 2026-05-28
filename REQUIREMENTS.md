@@ -77,7 +77,18 @@ The system shall generate:
 - The system shall preserve uncertain fragments and mark them explicitly instead of silently dropping them.
 - The system shall allow optional human correction before export.
 
-### 3.5 Layout-to-Markdown Reconstruction
+### 3.5 Post-OCR Text Correction
+
+- After OCR, the backend shall run a spell-correction pass on all text-bearing blocks (paragraphs, headings, bullet lists, numbered lists, callouts, marginal notes).
+- The spell corrector shall support Spanish (`es`) and English (`en`) dictionaries. Additional languages may be configured.
+- Corrections shall be conservative: a word is replaced only when the closest dictionary match has a Levenshtein edit distance of ≤ 2 and the word is at least 4 characters long.
+- The following token classes shall be exempt from correction: ALL-CAPS tokens (abbreviations), tokens containing digits, tokens shorter than 4 characters, domain-specific vocabulary (business, strategy, digital-transformation, and technology terms).
+- The corrected text shall be stored in a separate `auto_corrected_content` field on the block; the original OCR output in `content` must never be mutated.
+- User-supplied manual corrections shall always override automatic corrections at export time.
+- The spell corrector shall be toggleable via config (`spell_correction_enabled`).
+- Diagram, table-cell, and URL blocks shall not be corrected.
+
+### 3.6 Layout-to-Markdown Reconstruction
 
 - The system shall reconstruct note content into Markdown with preserved logical order.
 - The generated Markdown shall preserve, where possible:
@@ -93,13 +104,13 @@ The system shall generate:
 - The system shall insert explicit placeholders or references when a paper construct cannot be faithfully represented in plain Markdown.
 - The system shall produce stable file names and deterministic folder layout.
 
-### 3.6 Tables
+### 3.7 Tables
 
 - The system shall detect tables and reconstruct them as Markdown tables when feasible.
 - If a table cannot be represented reliably as Markdown, the system shall export a CSV, HTML, or image fallback and reference it from the Markdown note.
 - The system shall preserve row and column order, headers, merged-cell semantics when detectable, and table captions or nearby labels.
 
-### 3.7 Diagram Detection and Reconstruction
+### 3.8 Diagram Detection and Reconstruction
 
 - The system shall detect diagrams separately from ordinary text blocks.
 - The system shall classify diagrams into categories when possible, such as:
@@ -124,19 +135,19 @@ The system shall generate:
   - generate a placeholder section in Markdown
   - mark the diagram as requiring manual review
 
-### 3.8 Charts and Graphs
+### 3.9 Charts and Graphs
 
 - The system shall detect handwritten charts and graphs.
 - When chart semantics are recoverable, the system shall reconstruct them into a structured representation and companion source file where practical.
 - When semantics are not recoverable, the system shall preserve the chart as an extracted image and reference it from Markdown.
 
-### 3.9 Visual Semantics
+### 3.10 Visual Semantics
 
 - The system shall attempt to preserve visual semantics including color usage, underlines, highlight markers, boxed regions, arrows, indentation, and grouping.
 - The system shall convert visual semantics into Markdown-compatible notation or metadata where direct rendering is not possible.
 - The system shall keep color metadata for future richer export formats.
 
-### 3.10 Export and Storage
+### 3.11 Export and Storage
 
 - The user shall be able to configure the destination folder for generated notes.
 - The system shall export notes into a predictable directory structure, for example:
@@ -147,7 +158,7 @@ The system shall generate:
 - The system shall support repeated exports without uncontrolled duplication.
 - The system shall support overwrite, versioned export, and merge modes.
 
-### 3.11 Review Workflow
+### 3.12 Review Workflow
 
 - The application shall present a review screen before final export.
 - The review screen shall show:
@@ -159,7 +170,7 @@ The system shall generate:
   - confidence warnings
 - The user shall be able to correct text and approve or reject diagram reconstructions.
 
-### 3.12 Session Model
+### 3.13 Session Model
 
 - The system shall support grouping pages into a note session.
 - The session shall preserve page order and optionally support section grouping across multiple pages.

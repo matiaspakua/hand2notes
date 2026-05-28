@@ -65,16 +65,23 @@ class Block(BaseModel):
         default=False, description="True if below threshold or manually flagged"
     )
     content: str | None = Field(default=None, description="Extracted text content")
+    auto_corrected_content: str | None = Field(
+        default=None, description="Automatic spell-correction result; set by text_correction stage"
+    )
     corrected_content: str | None = Field(
-        default=None, description="User-corrected text; overrides content on export"
+        default=None, description="User-corrected text; overrides all automatic corrections"
     )
     visual_semantics: VisualSemantics | None = None
     crop_path: Path | None = Field(default=None, description="Saved crop image for this block")
 
     @property
     def effective_content(self) -> str | None:
-        """The text used on export: user correction takes precedence over OCR output."""
-        return self.corrected_content if self.corrected_content is not None else self.content
+        """Text used on export: user correction > auto spell-correction > raw OCR."""
+        if self.corrected_content is not None:
+            return self.corrected_content
+        if self.auto_corrected_content is not None:
+            return self.auto_corrected_content
+        return self.content
 
 
 class Page(BaseModel):
@@ -147,3 +154,11 @@ class VaultConfig(BaseModel):
     vlm_model: str = "qwen2.5vl:7b"
     ocr_languages: list[str] = Field(default_factory=lambda: ["es", "en"])
     confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    spell_correction_enabled: bool = Field(
+        default=True,
+        description="Run post-OCR spell correction (Spanish + English)",
+    )
+    spell_correction_languages: list[str] = Field(
+        default_factory=lambda: ["es", "en"],
+        description="Language codes passed to the spell corrector",
+    )
