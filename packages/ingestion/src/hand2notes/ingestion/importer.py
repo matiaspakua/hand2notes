@@ -1,21 +1,44 @@
 """Image import, validation, and format normalization.
 
-Accepts JPG, JPEG, PNG. Validates file size (< 50 MB).
+Accepts JPG, JPEG, PNG, and HEIC (converted to JPEG before downstream processing).
+Validates file size (< 50 MB).
 Returns a Page model with source_path, width_px, height_px populated.
 """
 
+import logging
 from pathlib import Path
 from uuid import UUID
 
 from hand2notes.core_models.models import Page
 from PIL import Image
 
+log = logging.getLogger(__name__)
+
 _MAX_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
-_SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png"}
+_SUPPORTED_SUFFIXES = {".jpg", ".jpeg", ".png", ".heic", ".heif"}
 
 
 class ImportError(Exception):
     """Raised when an image cannot be imported."""
+
+
+def _convert_heic_to_jpeg(heic_path: Path) -> Path:
+    """Convert HEIC/HEIF to JPEG and return the JPEG path."""
+    try:
+        from pillow_heif import register_heif_opener
+        register_heif_opener()
+    except ImportError:
+        raise ImportError(
+            "pillow-heif is required to import HEIC files. "
+            "Install with: pip install pillow-heif"
+        )
+
+    jpeg_path = heic_path.with_suffix(".jpg")
+    with Image.open(heic_path) as img:
+        img = img.convert("RGB")
+        img.save(jpeg_path, format="JPEG", quality=92)
+    log.info("Converted HEIC %s → %s", heic_path, jpeg_path)
+    return jpeg_path
 
 
 def validate_image(path: Path) -> None:
@@ -34,8 +57,16 @@ def validate_image(path: Path) -> None:
 
 
 def import_image(path: Path, session_id: UUID, sequence: int) -> Page:
-    """Validate and import a single image, returning a Page with metadata populated."""
+    """Validate and import a single image, returning a Page with metadata populated.
+
+    HEIC/HEIF files are converted to JPEG before returning; the resulting Page
+    points to the converted JPEG path so downstream stages always receive JPEG.
+    """
     validate_image(path)
+
+    # Convert HEIC/HEIF to JPEG before downstream processing
+    if path.suffix.lower() in {".heic", ".heif"}:
+        path = _convert_heic_to_jpeg(path)
 
     with Image.open(path) as img:
         width_px, height_px = img.size

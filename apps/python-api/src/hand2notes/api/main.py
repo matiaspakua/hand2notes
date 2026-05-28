@@ -1,12 +1,20 @@
 """FastAPI application entry point: lifespan, CORS, logging, and router registration."""
 
+import os
+import tempfile
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from hand2notes.storage.database import init_db
 
 from .middleware import RequestLoggingMiddleware, configure_logging, register_exception_handlers
+
+# Crops and artifact previews are served from a temp directory that stages
+# preprocessed images. The Electron renderer can access them at /static/crops/.
+_CROPS_DIR = Path(os.environ.get("HAND2NOTES_CROPS_DIR", tempfile.gettempdir())) / "hand2notes_crops"
 
 API_PREFIX = "/api/v1"
 
@@ -42,13 +50,20 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     _register_routers(app)
+    _mount_static(app)
     return app
 
 
+def _mount_static(app: FastAPI) -> None:
+    _CROPS_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/static/crops", StaticFiles(directory=str(_CROPS_DIR)), name="crops")
+
+
 def _register_routers(app: FastAPI) -> None:
-    from .routers import pipeline, sessions
+    from .routers import config, pipeline, sessions
     app.include_router(sessions.router, prefix=API_PREFIX)
     app.include_router(pipeline.router, prefix=API_PREFIX)
+    app.include_router(config.router, prefix=API_PREFIX)
 
 
 app = create_app()

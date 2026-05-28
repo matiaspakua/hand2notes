@@ -1,4 +1,4 @@
-"""Pipeline API router: process, cancel, run status, and WebSocket progress stream."""
+"""Pipeline API router: process, cancel, run status, WebSocket progress, and diagram review."""
 
 import asyncio
 import json
@@ -7,6 +7,8 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
+from hand2notes.core_models.blocks import DiagramBlock
+from hand2notes.core_models.enums import DiagramDecision
 from hand2notes.core_models.models import VaultConfig
 from pydantic import BaseModel
 
@@ -145,3 +147,183 @@ async def progress_websocket(websocket: WebSocket, session_id: UUID) -> None:
         queues = _progress_queues.get(session_id, [])
         if queue in queues:
             queues.remove(queue)
+
+
+# ---------------------------------------------------------------------------
+# Diagram review endpoints (US2)
+# ---------------------------------------------------------------------------
+
+class DiagramReviewPatch(BaseModel):
+    review_decision: str  # approved | rejected | deferred
+
+
+def _find_page(session_id: UUID, page_id: UUID):
+    pages = _session_pages.get(session_id, [])
+    for p in pages:
+        if p.id == page_id:
+            return p
+    return None
+
+
+def _find_diagram_block(page, block_id: UUID) -> DiagramBlock | None:
+    for b in page.blocks:
+        if isinstance(b, DiagramBlock) and b.id == block_id:
+            return b
+    return None
+
+
+@router.patch("/{session_id}/pages/{page_id}/diagrams/{block_id}")
+async def patch_diagram_review(
+    session_id: UUID,
+    page_id: UUID,
+    block_id: UUID,
+    body: DiagramReviewPatch,
+) -> dict:
+    """Set the review decision (approved/rejected/deferred) for a diagram block."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    page = _find_page(session_id, page_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+    block = _find_diagram_block(page, block_id)
+    if not block:
+        raise HTTPException(status_code=404, detail="Diagram block not found")
+
+    try:
+        decision = DiagramDecision(body.review_decision)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid review_decision; must be one of: {[d.value for d in DiagramDecision]}",
+        )
+
+    block.review_decision = decision
+    return {
+        "block_id": str(block.id),
+        "review_decision": block.review_decision.value,
+        "diagram_type": block.diagram_type.value,
+        "reconstruction_confidence": block.reconstruction_confidence,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Export endpoints (US5)
+# ---------------------------------------------------------------------------
+
+# Track per-session export artifacts in memory
+_export_artifacts: dict[UUID, list] = {}
+
+
+@router.post("/{session_id}/export", status_code=status.HTTP_202_ACCEPTED)
+async def export_session(session_id: UUID) -> dict:
+    """Trigger vault export for a session using the configured export mode."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    pages = _session_pages.get(session_id, [])
+    config = _default_config()
+
+    if not config.vault_root:
+        raise HTTPException(
+            status_code=422,
+            detail="vault_root is not configured. Set it via PUT /config first.",
+        )
+
+    from hand2notes.markdown_export.renderer import render_note
+    from hand2notes.markdown_export.vault_writer import write_note
+
+    markdown = render_note(session, pages, config)
+    artifacts = write_note(config, session, markdown, pages=pages)
+    _export_artifacts[session_id] = artifacts
+
+    from hand2notes.core_models.enums import SessionStatus
+    session.status = SessionStatus.EXPORTED
+
+    return {
+        "session_id": str(session_id),
+        "message": "Export started",
+        "artifacts_count": len(artifacts),
+    }
+
+
+@router.get("/{session_id}/export/status")
+async def export_status(session_id: UUID) -> dict:
+    """Return the artifact list and export status for a session."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    artifacts = _export_artifacts.get(session_id, [])
+    return {
+        "session_id": str(session_id),
+        "session_status": session.status.value,
+        "artifacts": [
+            {
+                "artifact_type": a.artifact_type.value,
+                "vault_relative_path": a.vault_relative_path,
+                "file_path": str(a.file_path),
+            }
+            for a in artifacts
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Review and correction endpoints (US6)
+# ---------------------------------------------------------------------------
+
+class BlockCorrectionPatch(BaseModel):
+    corrected_content: str | None = None
+    review_flag: bool = False
+
+
+@router.get("/{session_id}/pages/{page_id}/review")
+async def get_page_review_full(session_id: UUID, page_id: UUID) -> dict:
+    """Return full review payload for a page, including Markdown preview."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    page = _find_page(session_id, page_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    from hand2notes.review.review_builder import build_review_payload
+    config = _default_config()
+    return build_review_payload(session, page, config)
+
+
+@router.patch("/{session_id}/pages/{page_id}/blocks/{block_id}")
+async def patch_block(
+    session_id: UUID,
+    page_id: UUID,
+    block_id: UUID,
+    body: BlockCorrectionPatch,
+) -> dict:
+    """Apply a text correction to a block."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    page = _find_page(session_id, page_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    from hand2notes.review.correction_service import apply_correction
+    block = apply_correction(
+        page,
+        block_id,
+        corrected_content=body.corrected_content or "",
+        review_flag=body.review_flag,
+    )
+    if block is None:
+        raise HTTPException(status_code=404, detail="Block not found")
+
+    return {
+        "block_id": str(block.id),
+        "block_type": block.block_type.value,
+        "content": block.content,
+        "corrected_content": block.corrected_content,
+        "review_flag": block.review_flag,
+        "confidence": block.confidence,
+    }

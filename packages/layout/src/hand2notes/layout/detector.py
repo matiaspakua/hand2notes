@@ -2,11 +2,15 @@
 
 Falls back to a geometric full-page block when Surya is not installed, so the
 pipeline is runnable in environments without the heavy ML dependency.
+
+Diagram regions (Surya label "Figure") are returned as DiagramBlock instances
+with crop_path unset — the crop is saved in the detect_diagrams pipeline stage.
 """
 
 from pathlib import Path
 
-from hand2notes.core_models.enums import BlockType
+from hand2notes.core_models.blocks import DiagramBlock
+from hand2notes.core_models.enums import BlockType, DiagramType
 from hand2notes.core_models.models import Block, BoundingBox, Page
 
 try:
@@ -58,21 +62,25 @@ def _detect_with_surya(image_path: Path, page: Page) -> list[Block]:
     for i, text_line in enumerate(predictions[0].bboxes):
         bbox = text_line.bbox  # [x1, y1, x2, y2]
         x1, y1, x2, y2 = bbox
-        block_type = _surya_label_to_block_type(getattr(text_line, "label", "Text"))
-        blocks.append(
-            Block(
-                page_id=page.id,
-                block_type=block_type,
-                reading_order=i,
-                bbox=BoundingBox(
-                    x=int(x1),
-                    y=int(y1),
-                    width=int(x2 - x1),
-                    height=int(y2 - y1),
-                ),
-                confidence=float(getattr(text_line, "confidence", 0.8)),
-            )
+        label = getattr(text_line, "label", "Text")
+        block_type = _surya_label_to_block_type(label)
+        common = dict(
+            page_id=page.id,
+            block_type=block_type,
+            reading_order=i,
+            bbox=BoundingBox(
+                x=int(x1),
+                y=int(y1),
+                width=int(x2 - x1),
+                height=int(y2 - y1),
+            ),
+            confidence=float(getattr(text_line, "confidence", 0.8)),
         )
+        if block_type == BlockType.DIAGRAM:
+            # crop_path will be set by the crop_saver in the detect_diagrams stage
+            blocks.append(DiagramBlock(**common, crop_path=page.source_path))
+        else:
+            blocks.append(Block(**common))
     return blocks
 
 
