@@ -68,6 +68,8 @@ async def run_pipeline(
     for stage, stage_fn in stages:
         _check_cancel()
         _emit({"event": "stage_started", "stage": stage.value})
+        # Yield so any queued WebSocket sends can flush before the stage blocks.
+        await asyncio.sleep(0)
 
         # Run audit logging is persisted only when a DB session is supplied.
         # Sessions/pages currently live in memory (DB wiring lands in Phase 5),
@@ -87,6 +89,7 @@ async def run_pipeline(
             if db is not None and run_id is not None:
                 await run_logger.complete_run(db, run_id, metrics)
             _emit({"event": "stage_completed", "stage": stage.value, "metrics": metrics})
+            await asyncio.sleep(0)  # Let WebSocket flush stage_completed before next stage starts
             # Emit per-page progress events for batch sessions
             if len(pages) >= 20:
                 for idx, page in enumerate(pages):
@@ -109,6 +112,7 @@ async def run_pipeline(
             raise PipelineError(f"Stage {stage.value} failed: {error_msg}") from exc
 
     _emit({"event": "run_completed", "session_id": str(session.id)})
+    await asyncio.sleep(0)  # Let WebSocket send run_completed before the task finishes
     return session
 
 
