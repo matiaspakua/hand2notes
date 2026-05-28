@@ -69,6 +69,8 @@ def inject_front_matter(
     markdown_body: str, session: Session, config: VaultConfig | None = None
 ) -> str:
     """Prepend YAML front matter to a Markdown string and return the full note."""
+    if config and not config.include_front_matter:
+        return markdown_body.strip()
     fields = build_front_matter(session, config)
     post = frontmatter.Post(markdown_body, **fields)
     return frontmatter.dumps(post)
