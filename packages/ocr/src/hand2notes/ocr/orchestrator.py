@@ -8,6 +8,7 @@ Strategy:
   5. Confidence threshold gates the review_flag for each block.
 """
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +18,8 @@ from .surya_ocr_adapter import OcrLine, run_ocr_on_image, _SURYA_OCR_AVAILABLE
 from .trocr_adapter import _TROCR_AVAILABLE
 from .trocr_adapter import run_ocr as _trocr_ocr
 from .paddle_adapter import run_ocr as _paddle_ocr
+
+log = logging.getLogger(__name__)
 
 _DEFAULT_CONFIDENCE_THRESHOLD = 0.55
 
@@ -99,18 +102,73 @@ def run_ocr_on_page(
     image_path: Path,
     confidence_threshold: float = _DEFAULT_CONFIDENCE_THRESHOLD,
     languages: list[str] | None = None,
+    vlm_model: str | None = None,
 ) -> list[Block]:
     """Run OCR across all text blocks on a page.
+
+    Tries VLM full-page transcription first (when Ollama is available).
+    Falls back to Surya layout + per-block TrOCR/PaddleOCR if unavailable.
 
     Mutates blocks in place (sets content, confidence, review_flag).
     Returns the updated blocks list for convenience.
     """
     langs = languages or ["es", "en"]
 
+    # --- Primary path 1: Qwen2.5-VL (best for handwriting, tried first) ---
+    try:
+        from .qwen_vl_transcriber import is_available as _qwen_available
+        from .qwen_vl_transcriber import transcribe_page as _qwen_transcribe
+        from .vlm_blocks_parser import parse_markdown_to_blocks as _parse_blocks
+
+        if _qwen_available():
+            log.info("VLM transcription: Qwen2.5-VL for page %d", page.sequence)
+            try:
+                markdown = _qwen_transcribe(image_path)
+                blocks = _parse_blocks(markdown, page)
+                page.blocks = blocks
+                log.info(
+                    "Qwen2.5-VL transcription complete: page %d — %d blocks, %d chars",
+                    page.sequence, len(blocks), len(markdown),
+                )
+                return page.blocks
+            except Exception as exc:
+                log.warning(
+                    "Qwen2.5-VL failed for page %d: %s — trying gemma4",
+                    page.sequence, exc,
+                )
+    except ImportError:
+        pass
+
+    # --- Primary path 2: gemma4 via Ollama (fallback VLM) ---
+    try:
+        from .vlm_transcriber import is_available as _vlm_available
+        from .vlm_transcriber import transcribe_page as _vlm_transcribe
+        from .vlm_blocks_parser import parse_markdown_to_blocks as _parse_blocks
+
+        model = vlm_model or "gemma4:e4b"
+        if _vlm_available(model=model):
+            log.info("VLM transcription: using model=%s for page %d", model, page.sequence)
+            try:
+                markdown = _vlm_transcribe(image_path, model=model)
+                blocks = _parse_blocks(markdown, page)
+                page.blocks = blocks
+                log.info(
+                    "VLM transcription complete: page %d — %d blocks, %d chars",
+                    page.sequence, len(blocks), len(markdown),
+                )
+                return page.blocks
+            except Exception as exc:
+                log.warning(
+                    "VLM transcription failed for page %d: %s — falling back to Surya+TrOCR",
+                    page.sequence, exc,
+                )
+    except ImportError:
+        pass
+
     full_image = _load_image(image_path)
     h, w = full_image.shape[:2] if full_image is not None and full_image.size > 0 else (1, 1)
 
-    # --- Primary: Surya full-page OCR ---
+    # --- Fallback: Surya full-page OCR ---
     if _SURYA_OCR_AVAILABLE:
         surya_result = run_ocr_on_image(image_path, languages=langs)
         if surya_result.success and surya_result.lines:
