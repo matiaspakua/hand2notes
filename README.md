@@ -9,12 +9,25 @@ hand2notes is a local-first desktop application that converts mobile phone photo
 | Phase 1 — Setup | Monorepo skeleton, tooling, golden fixtures | ✅ Done |
 | Phase 2 — Foundation | Core models, storage, FastAPI, Electron shell | ✅ Done |
 | Phase 3 — US1 MVP | Ingestion → OCR → Export pipeline | 🔄 In progress |
-| Phase 4 — US2 | Diagram detection and export | ⏳ Pending |
+| Phase 4 — US2 | Diagram detection and export | 📋 Specifying (see `specs/004-diagram-detection`) |
 | Phase 5 — US5 | Obsidian vault organization | ⏳ Pending |
 | Phase 6 — US6 | Review and correction workflow | ⏳ Pending |
 | Phase 7–9 | Tables, visual semantics, polish | ⏳ Pending |
 
-See `specs/001-handwritten-to-obsidian/tasks.md` for the full task breakdown.
+## Specifications & Feature Planning
+
+Feature specifications are maintained in the `specs/` directory using the Speckit framework:
+
+- **`specs/001-handwritten-to-obsidian/`** — Core pipeline specification (Phase 3)
+- **`specs/004-diagram-detection/`** — Diagram detection accuracy improvement (Phase 4)
+
+Each specification includes:
+- User scenarios and acceptance criteria
+- Functional and non-functional requirements
+- Success metrics and key entities
+- Quality checklists for requirements validation
+
+See individual spec files for detailed requirements and acceptance scenarios.
 
 ## Development Setup
 
