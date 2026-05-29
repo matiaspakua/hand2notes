@@ -6,7 +6,7 @@ Generates .drawio XML for annotated_sketch, graph_network, and other geometry ty
 import xml.etree.ElementTree as ET
 from uuid import uuid4
 
-from hand2notes.core_models.blocks import DiagramBlock, DiagramEdge, DiagramNode
+from hand2notes.core_models.blocks import DiagramBlock
 
 
 def render_drawio(block: DiagramBlock) -> str:

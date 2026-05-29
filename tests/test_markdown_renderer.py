@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox, Page, Session, VaultConfig

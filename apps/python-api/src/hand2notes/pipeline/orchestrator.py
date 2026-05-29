@@ -17,6 +17,8 @@ from hand2notes.core_models.models import Page, Session, VaultConfig
 from hand2notes.storage import run_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .metrics import StageTiming, summarize_run
+
 log = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -71,6 +73,7 @@ async def run_pipeline(
     )
 
     cumulative_elapsed = 0.0
+    stage_timings: list[StageTiming] = []
     for stage, stage_fn in stages:
         _check_cancel()
         log.info("Stage starting: session=%s stage=%s", session.id, stage.value)
@@ -88,6 +91,13 @@ async def run_pipeline(
             elapsed = asyncio.get_event_loop().time() - stage_start
             cumulative_elapsed += elapsed
             metrics = {**(metrics or {}), "elapsed_s": round(elapsed, 3)}
+            stage_timings.append(
+                StageTiming(
+                    stage=stage.value,
+                    elapsed_s=elapsed,
+                    metrics={k: v for k, v in metrics.items() if k != "elapsed_s"},
+                )
+            )
             if cumulative_elapsed > 90:
                 log.warning(
                     "Pipeline running slow: session=%s cumulative=%.1fs exceeds 90s threshold",
@@ -153,6 +163,11 @@ async def run_pipeline(
                 await run_logger.fail_run(db, run_id, error_msg)
             raise PipelineError(f"Stage {stage.value} failed: {error_msg}") from exc
 
+    run_metrics = summarize_run(stage_timings)
+    log.info("Pipeline metrics: session=%s %s", session.id, run_metrics.log_line())
+    _emit(run_metrics.to_event())
+    await asyncio.sleep(0)
+
     log.info(
         "Pipeline completed: session=%s total_elapsed=%.2fs",
         session.id, cumulative_elapsed,
@@ -184,7 +199,7 @@ async def _stage_import(
     return {"pages_imported": float(len(pages))}
 
 
-_MAX_PREPROCESS_WIDTH = 1600  # Limit processed images for OCR/layout speed
+_MAX_PREPROCESS_WIDTH = 1280  # Limit processed images for OCR/layout speed (VLM sweet spot)
 
 
 def _resize_for_processing(src: Path, dst: Path, max_width: int = _MAX_PREPROCESS_WIDTH) -> None:
@@ -201,10 +216,9 @@ def _resize_for_processing(src: Path, dst: Path, max_width: int = _MAX_PREPROCES
 async def _stage_preprocess(
     session: Session, pages: list[Page], config: VaultConfig
 ) -> dict[str, float]:
-    from hand2notes.preprocessing.denoise import denoise_file
     from hand2notes.preprocessing.deskew import deskew_file
 
-    log.info("Preprocessing %d page(s): deskew → denoise → resize", len(pages))
+    log.info("Preprocessing %d page(s): deskew → resize", len(pages))
     corrected = 0
     for page in pages:
         work_dir = page.source_path.parent / "preprocessed"
@@ -216,11 +230,13 @@ async def _stage_preprocess(
             log.info("Page %d: deskew correction applied", page.sequence)
             corrected += 1
 
-        denoised_path = work_dir / f"{page.id}_denoised.jpg"
-        denoise_file(deskewed_path, denoised_path)
-
+        # NOTE: denoise (CLAHE + shadow removal) is intentionally skipped here.
+        # It produces a grainy grayscale image that degrades the primary VLM
+        # transcriber — causing early-stopping and dropped content. The VLM reads
+        # the deskewed colour photo far more reliably. The denoise module remains
+        # available for the Surya/TrOCR fallback path if ever needed.
         processed_path = work_dir / f"{page.id}_processed.jpg"
-        _resize_for_processing(denoised_path, processed_path)
+        _resize_for_processing(deskewed_path, processed_path)
 
         page.preprocessed_path = processed_path
         from PIL import Image as PILImage
@@ -407,17 +423,14 @@ async def _stage_reconstruct_structure(
 
 def _process_tables_in_page(page: Page, image_path, config: VaultConfig) -> int:
     """Run table cell extraction on all TABLE blocks in a page. Returns count."""
-    from pathlib import Path as _Path
 
     from hand2notes.core_models.blocks import TableBlock
-    from hand2notes.core_models.enums import FallbackType
-    from hand2notes.tables.cell_extractor import extract_cells
     from hand2notes.tables.caption_detector import detect_caption
+    from hand2notes.tables.cell_extractor import extract_cells
 
     # Determine assets directory
     if config.vault_root:
         try:
-            from hand2notes.markdown_export.vault_writer import resolve_session_folder  # type: ignore
             # We don't have session here; use a temp path
             assets_dir = image_path.parent / "table_assets"
         except Exception:
@@ -471,10 +484,9 @@ async def _stage_detect_diagrams(
     session: Session, pages: list[Page], config: VaultConfig
 ) -> dict[str, float]:
     """Detect and interpret diagram blocks using the configured VLM runtime."""
-    from pathlib import Path
 
     from hand2notes.core_models.blocks import DiagramBlock
-    from hand2notes.core_models.enums import DiagramDecision, DiagramFormat, VLMRuntime
+    from hand2notes.core_models.enums import DiagramDecision, VLMRuntime
     from hand2notes.diagrams.crop_saver import save_crop
     from hand2notes.diagrams.vlm_validator import validate_vlm_response
 
@@ -517,10 +529,14 @@ async def _stage_detect_diagrams(
             # Attempt VLM interpretation
             try:
                 if config.vlm_runtime == VLMRuntime.OLLAMA:
-                    from hand2notes.diagrams.vlm_client_ollama import interpret_diagram as ollama_interpret
+                    from hand2notes.diagrams.vlm_client_ollama import (
+                        interpret_diagram as ollama_interpret,
+                    )
                     raw = ollama_interpret(block.crop_path)
                 else:
-                    from hand2notes.diagrams.vlm_client_llamacpp import interpret_diagram as llama_interpret
+                    from hand2notes.diagrams.vlm_client_llamacpp import (
+                        interpret_diagram as llama_interpret,
+                    )
                     if not config.vlm_model:
                         log.warning(
                             "vlm_model path not set — skipping VLM for diagram block %s on page %d",

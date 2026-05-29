@@ -36,7 +36,6 @@ def detect_shapes(image_path: Path) -> list[dict]:
 
 def _detect_with_opencv(image_path: Path) -> list[dict]:
     import cv2
-    import numpy as np
 
     img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
     if img is None:

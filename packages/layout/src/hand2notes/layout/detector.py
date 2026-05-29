@@ -10,7 +10,7 @@ with crop_path unset — the crop is saved in the detect_diagrams pipeline stage
 from pathlib import Path
 
 from hand2notes.core_models.blocks import DiagramBlock
-from hand2notes.core_models.enums import BlockType, DiagramType
+from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox, Page
 
 try:

@@ -2,8 +2,6 @@
 
 from uuid import uuid4
 
-import pytest
-
 from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox
 from hand2notes.layout.block_merger import merge_page_blocks

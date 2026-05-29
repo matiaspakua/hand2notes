@@ -1,0 +1,181 @@
+/* Processing screen — visual theme + animations.
+   Pure CSS (no animation-runtime dependency) so it renders reliably everywhere. */
+
+.h2n-processing {
+  --bg: #0b1020;
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-border: rgba(255, 255, 255, 0.09);
+  --text: #e7ecf5;
+  --text-dim: #97a3b8;
+  --accent: #6366f1;
+  --accent-2: #06b6d4;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 1.75rem 2rem;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, rgba(6, 182, 212, 0.14), transparent 55%),
+    var(--bg);
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 1.5rem;
+  animation: h2n-fade-in 0.5s ease both;
+}
+
+@media (max-width: 980px) {
+  .h2n-processing { grid-template-columns: 1fr; }
+}
+
+.h2n-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #c7d2fe, #67e8f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.h2n-subtitle { margin: 0 0 1rem; color: var(--text-dim); font-size: 0.86rem; }
+
+.h2n-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 1.1rem 1.2rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+.h2n-card + .h2n-card { margin-top: 1rem; }
+.h2n-card-title {
+  margin: 0 0 0.8rem; font-size: 0.78rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
+}
+
+/* ── Progress ring ─────────────────────────────────────────────── */
+.h2n-ring-wrap { display: flex; align-items: center; gap: 1rem; }
+.h2n-ring-track { stroke: rgba(255, 255, 255, 0.08); }
+.h2n-ring-fill {
+  stroke: url(#h2n-ring-grad);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  filter: drop-shadow(0 0 6px rgba(103, 232, 249, 0.5));
+}
+.h2n-ring-label { font-size: 1.5rem; font-weight: 700; fill: var(--text); }
+.h2n-ring-status { font-size: 0.9rem; font-weight: 600; }
+.h2n-ring-sub { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; }
+
+/* ── Timeline ──────────────────────────────────────────────────── */
+.h2n-timeline { list-style: none; margin: 0; padding: 0; }
+.h2n-stage {
+  display: flex; gap: 0.75rem; align-items: flex-start;
+  padding: 0.45rem 0; position: relative;
+}
+.h2n-stage:not(:last-child)::before {
+  content: ''; position: absolute; left: 13px; top: 28px; bottom: -6px;
+  width: 2px; background: rgba(255, 255, 255, 0.08);
+}
+.h2n-stage.done:not(:last-child)::before { background: linear-gradient(var(--accent), var(--accent-2)); }
+.h2n-dot {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 0.85rem;
+  border: 2px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.04);
+  transition: all 0.4s ease; z-index: 1;
+}
+.h2n-stage.running .h2n-dot {
+  border-color: var(--accent-2); color: #fff;
+  box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.5);
+  animation: h2n-pulse 1.4s ease-out infinite;
+}
+.h2n-stage.done .h2n-dot {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+.h2n-stage.failed .h2n-dot { border-color: #ef4444; color: #ef4444; }
+.h2n-stage-label { font-size: 0.88rem; font-weight: 500; }
+.h2n-stage.idle .h2n-stage-label { color: var(--text-dim); }
+.h2n-stage-metrics {
+  font-size: 0.72rem; color: var(--text-dim); margin-top: 2px;
+  animation: h2n-slide-in 0.4s ease both;
+}
+.h2n-stage-time {
+  margin-left: auto; font-size: 0.74rem; color: var(--accent-2);
+  font-variant-numeric: tabular-nums; align-self: center;
+}
+
+/* ── Timing chart ──────────────────────────────────────────────── */
+.h2n-bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+.h2n-bar-label { width: 76px; font-size: 0.74rem; color: var(--text-dim); flex-shrink: 0; }
+.h2n-bar-track {
+  flex: 1; height: 14px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06); overflow: hidden;
+}
+.h2n-bar-fill {
+  height: 100%; border-radius: 7px;
+  transform-origin: left center; animation: h2n-grow-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  background-image: linear-gradient(90deg, rgba(255,255,255,0.18), transparent);
+}
+.h2n-bar-val {
+  width: 52px; text-align: right; font-size: 0.74rem;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+
+/* ── Stat tiles ────────────────────────────────────────────────── */
+.h2n-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+.h2n-stat {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--panel-border);
+  border-radius: 12px; padding: 0.7rem; text-align: center;
+  animation: h2n-pop 0.4s ease both;
+}
+.h2n-stat-value { font-size: 1.3rem; font-weight: 700; }
+.h2n-stat-label { font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ── Canvas + misc ─────────────────────────────────────────────── */
+.h2n-canvas {
+  display: block; width: 100%; border-radius: 14px;
+  border: 1px solid var(--panel-border); background: #0f1626;
+}
+.h2n-legend { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem; }
+.h2n-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 3px 9px; border-radius: 999px; font-size: 0.72rem;
+  border: 1px solid var(--panel-border); background: rgba(255, 255, 255, 0.04);
+}
+.h2n-chip-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+.h2n-btn {
+  margin-top: 1rem; padding: 0.55rem 1.1rem; width: 100%;
+  background: rgba(255, 255, 255, 0.06); color: var(--text);
+  border: 1px solid var(--panel-border); border-radius: 10px;
+  cursor: pointer; font-size: 0.85rem; transition: background 0.2s ease;
+}
+.h2n-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.h2n-btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none; color: #fff; font-weight: 600;
+}
+
+.h2n-error { color: #fca5a5; font-size: 0.85rem; margin-top: 0.5rem; }
+.h2n-placeholder {
+  display: grid; place-items: center; min-height: 420px;
+  border: 1px dashed var(--panel-border); border-radius: 14px; color: var(--text-dim);
+}
+.h2n-spinner {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.15); border-top-color: var(--accent-2);
+  animation: h2n-spin 0.8s linear infinite; display: inline-block;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────── */
+@keyframes h2n-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes h2n-slide-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@keyframes h2n-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes h2n-pop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes h2n-spin { to { transform: rotate(360deg); } }
+@keyframes h2n-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.5); }
+  70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+}

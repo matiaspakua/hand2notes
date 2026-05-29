@@ -233,3 +233,6 @@ playwright-report/
 models/
 *.gguf
 outputs/
+# hand2notes pipeline scratch artifacts
+inputs/**/preprocessed/
+inputs/**/*_processed_actual.md

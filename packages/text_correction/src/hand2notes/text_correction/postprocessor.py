@@ -7,9 +7,9 @@ data, and URL references are left untouched.
 from __future__ import annotations
 
 from hand2notes.core_models.enums import BlockType
-from hand2notes.core_models.models import Block, Page
+from hand2notes.core_models.models import Page
 
-from .corrector import CorrectionResult, SpellCorrector, get_corrector
+from .corrector import SpellCorrector, get_corrector
 
 # Block types that carry unstructured OCR text and benefit from spell correction.
 _CORRECTABLE_TYPES: frozenset[BlockType] = frozenset({

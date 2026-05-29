@@ -75,11 +75,18 @@ export interface PipelineRun {
   progress?: { current_page: number; total_pages: number; percent: number };
 }
 
+export interface RunStageTiming {
+  stage: string;
+  elapsed_s: number;
+  metrics: Record<string, number>;
+}
+
 export interface ProgressEvent {
   event:
     | 'stage_started'
     | 'stage_completed'
     | 'page_layout_detected'
+    | 'run_metrics'
     | 'run_completed'
     | 'run_failed'
     | 'run_cancelled';
@@ -99,6 +106,12 @@ export interface ProgressEvent {
   message?: string;
   progress_percent?: number;
   timestamp?: string;
+  // run_metrics payload
+  total_elapsed_s?: number;
+  stage_count?: number;
+  slowest_stage?: string | null;
+  slowest_stage_s?: number;
+  stages?: RunStageTiming[];
 }
 
 export interface ReviewPayload {

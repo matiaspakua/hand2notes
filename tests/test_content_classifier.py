@@ -2,11 +2,9 @@
 
 from uuid import uuid4
 
-import pytest
-
 from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox
-from hand2notes.markdown_export.content_classifier import classify_blocks, apply_overrides
+from hand2notes.markdown_export.content_classifier import apply_overrides, classify_blocks
 
 
 def _b(content, btype=BlockType.PARAGRAPH, y=200, h=20, x=0, w=400) -> Block:

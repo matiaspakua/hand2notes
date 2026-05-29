@@ -1,10 +1,8 @@
 """Unit tests for the SpellCorrector and domain-term preservation."""
 
 import pytest
-
 from hand2notes.text_correction.corrector import SpellCorrector, get_corrector
 from hand2notes.text_correction.domain_terms import is_domain_term
-
 
 # ---------------------------------------------------------------------------
 # Domain-term preservation

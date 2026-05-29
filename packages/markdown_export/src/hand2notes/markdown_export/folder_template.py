@@ -4,9 +4,8 @@ Renders templates like {{notebook}}/{{date}}-{{topic}} with session fields.
 Validates Jinja2 syntax on save so invalid templates are caught early.
 """
 
-from jinja2 import BaseLoader, Environment, TemplateSyntaxError
-
 from hand2notes.core_models.models import Session
+from jinja2 import BaseLoader, Environment, TemplateSyntaxError
 
 _render_env = Environment(loader=BaseLoader(), autoescape=False)
 

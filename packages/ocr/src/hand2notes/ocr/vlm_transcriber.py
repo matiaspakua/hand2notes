@@ -21,31 +21,31 @@ _DEFAULT_BASE_URL = "http://localhost:11434"
 _DEFAULT_MODEL = "gemma4:e4b"
 _TIMEOUT = 120.0
 
-# Few-shot example teaches output FORMAT.  The model reads actual content from
-# the image — not from this example — and formats it the same way.
+# Few-shot example teaches output FORMAT only. It uses GENERIC placeholder content
+# (deliberately unrelated to any real notebook page) so the model learns the
+# structure — titles, connectors, tables, numbered lists, side-by-side layout —
+# without the example leaking the actual answer for any specific page.
 _FEW_SHOT_EXAMPLE = (
-    "# Master LaSalle\n"
-    "# Gestión empresarial y Transformación Digital\n\n"
-    "Empresa --> Desde el punto de vista estratégico.\n"
+    "# Cuaderno de Ejemplo\n"
+    "# Título de la Materia\n\n"
+    "Concepto --> Definición breve del tema.\n"
     "|\n"
-    "---> Cómo se estructura?\n\n"
-    "1) Misión, Visión, Valores\n\n"
-    "| A que se dedica en forma diferenciada | Que genero a futuro | No se trabaja con valores              |\n"
-    "| ------------------------------------- | ------------------- | -------------------------------------- |\n"
-    "|                                       |                     | Competencia corporativa                |\n"
-    "|                                       |                     | acá evaluamos competencias específicas |\n\n"
-    "2) Estrategía competitiva\n"
+    "---> Pregunta guía?\n\n"
+    "1) Primer apartado\n\n"
+    "| Columna uno          | Columna dos          | Columna tres          |\n"
+    "| -------------------- | -------------------- | --------------------- |\n"
+    "|                      |                      | dato de la celda      |\n"
+    "|                      |                      | otro dato de ejemplo  |\n\n"
+    "2) Segundo apartado\n"
     "\t\t\t\t|\n"
-    "\t\t\t\t|---> Objetivos estrategicos\n\n"
-    "1 . A que me dedico?\n"
-    "2 . Mercados geográficos\n"
-    "3 . Segmento o nicho\n"
-    "4 . Ventajas competitivas\n"
-    "5 . Objetivo de posicionamiento\n"
-    "\t   |                                |\n"
-    "       |                                |\n"
-    "       Como quiero          La Imagen de mi,\n"
-    "       Que me vean         Respecto de mis competidores"
+    "\t\t\t\t|---> Subtema relacionado\n\n"
+    "1 . Primer ítem\n"
+    "2 . Segundo ítem\n"
+    "3 . Tercer ítem\n"
+    "\t   |                    |\n"
+    "       |                    |\n"
+    "       Texto izquierdo      Texto derecho,\n"
+    "       segunda línea        segunda línea derecha"
 )
 
 _TRANSCRIPTION_PROMPT = (
@@ -178,7 +178,8 @@ def transcribe_page(
             }
         ],
         "stream": False,
-        "options": {"temperature": 0.0},
+        # Bounded num_ctx prevents the ~35 GiB compute-graph segfault on CPU hosts.
+        "options": {"temperature": 0.0, "num_ctx": 8192, "num_predict": 2048},
     }
 
     try:
