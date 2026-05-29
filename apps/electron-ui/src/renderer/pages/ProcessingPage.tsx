@@ -106,13 +106,19 @@ export function ProcessingPage({ sessionId, onComplete }: Props) {
         };
 
         const resp = await api.startProcessing(sessionId);
-        if (cancelled) return;
+        if (cancelled) {
+          closeSocket();
+          return;
+        }
         startRun(resp.run_id, sessionId);
         setStatusMessage('Pipeline started…');
+        // NOTE: do NOT close the socket here — the run is now in progress and we
+        // must keep streaming until a terminal event (run_completed/failed/cancelled)
+        // or the component unmounts. Closing on the success path was the bug that
+        // made the UI report "connection closed unexpectedly" and never complete.
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to start pipeline');
-      } finally {
-        if (!finished) closeSocket();
+        closeSocket();
       }
     };
 
