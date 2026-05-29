@@ -32,7 +32,6 @@ def render_plantuml(block: DiagramBlock) -> str:
 
 def _render_flowchart(nodes: list[DiagramNode], edges: list[DiagramEdge]) -> str:
     lines = ["@startuml"]
-    node_ids = {n.id for n in nodes}
 
     for node in nodes:
         node_type = (node.node_type or "").lower()

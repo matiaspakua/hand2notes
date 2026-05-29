@@ -4,7 +4,7 @@ Sets block.review_flag=True for blocks below the configured threshold or with
 no extracted content, so the review screen can highlight them.
 """
 
-from hand2notes.core_models.models import Block, Page
+from hand2notes.core_models.models import Page
 
 
 def flag_low_confidence_blocks(

@@ -12,17 +12,17 @@ the review stage.
 from __future__ import annotations
 
 import re
-import uuid
-from pathlib import Path
 from uuid import UUID
 
+from hand2notes.core_models.blocks import TableBlock
 from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox, Page
-from hand2notes.core_models.blocks import TableBlock
 
 _VLM_CONFIDENCE = 0.95
 _FAKE_BBOX = BoundingBox(x=0, y=0, width=1, height=1)
 
+_FENCE = re.compile(r"^\s*```([A-Za-z0-9_+-]*)\s*$")
+_DIAGRAM_LANGS = {"mermaid", "plantuml", "puml", "dot", "graphviz"}
 _H1 = re.compile(r"^#{1}\s+(.+)$")
 _H2 = re.compile(r"^#{2}\s+(.+)$")
 _H3 = re.compile(r"^#{3,}\s+(.+)$")
@@ -103,6 +103,23 @@ def parse_markdown_to_blocks(
 
     while i < len(lines):
         line = lines[i]
+
+        # ── Fenced diagram block (```mermaid / ```plantuml …) ────────────────
+        fence = _FENCE.match(line)
+        if fence and fence.group(1).lower() in _DIAGRAM_LANGS:
+            fence_lines = [line]
+            i += 1
+            while i < len(lines):
+                fence_lines.append(lines[i])
+                closed = _FENCE.match(lines[i]) and not lines[i].strip("` ")
+                i += 1
+                if closed:
+                    break
+            blocks.append(
+                _make_block(page_id, order, BlockType.DIAGRAM, "\n".join(fence_lines), w, h)
+            )
+            order += 1
+            continue
 
         # ── Table block (collect until table ends) ───────────────────────────
         # Match against the raw line (not stripped) so tab-indented connector

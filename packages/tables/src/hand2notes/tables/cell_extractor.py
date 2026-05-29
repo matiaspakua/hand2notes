@@ -99,7 +99,6 @@ def _extract_with_opencv(block: TableBlock, image_path: Path) -> TableBlock:
 
 def _find_splits(projection, size: int) -> list[int]:
     """Find row/column boundaries from a projection profile."""
-    import numpy as np
     threshold = projection.max() * 0.3
     in_line = False
     splits = [0]
@@ -116,8 +115,8 @@ def _find_splits(projection, size: int) -> list[int]:
 def _ocr_cell(cell_image) -> str:
     """Run OCR on a single cell image; return empty string on failure."""
     try:
-        from PIL import Image as PILImage
         import numpy as np
+        from PIL import Image as PILImage
         pil = PILImage.fromarray(cell_image)
 
         try:

@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Sequence
 
 from .domain_terms import is_domain_term
 
@@ -24,7 +24,7 @@ _MAX_EDIT_DISTANCE = 2
 _MIN_WORD_LEN = 4
 # Thread-safe singleton lock.
 _lock = threading.Lock()
-_corrector_cache: dict[tuple[str, ...], "SpellCorrector"] = {}
+_corrector_cache: dict[tuple[str, ...], SpellCorrector] = {}
 
 
 @dataclass

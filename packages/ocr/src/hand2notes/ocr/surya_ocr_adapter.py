@@ -20,9 +20,9 @@ try:
 except ImportError:
     _SURYA_OCR_AVAILABLE = False
 
-_foundation: "_FoundationPredictor | None" = None
-_det: "_DetectionPredictor | None" = None
-_rec: "_RecognitionPredictor | None" = None
+_foundation: _FoundationPredictor | None = None
+_det: _DetectionPredictor | None = None
+_rec: _RecognitionPredictor | None = None
 
 # Lines shorter than this are likely noise fragments
 _MIN_TEXT_LEN = 2

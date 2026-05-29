@@ -54,6 +54,9 @@ def interpret_diagram(
         ],
         "stream": False,
         "format": "json",
+        # Bounded context: an unbounded num_ctx makes Ollama allocate a ~35 GiB
+        # compute graph that segfaults the runner on CPU-only hosts.
+        "options": {"temperature": 0.0, "num_ctx": 8192, "num_predict": 1024},
     }
 
     try:

@@ -10,7 +10,7 @@ Stale file cleanup runs for overwrite mode.
 """
 
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from hand2notes.core_models.blocks import DiagramBlock, TableBlock
@@ -207,7 +207,7 @@ def _write_versioned(
     session_folder = resolve_session_folder(config, session)
     diagrams_dir, assets_dir = _setup_dirs(session_folder)
 
-    ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
     note_path = session_folder / f"notes-{ts}.md"
     note_path.write_text(markdown_content, encoding="utf-8")
     vr_note = str(note_path.relative_to(config.vault_root))

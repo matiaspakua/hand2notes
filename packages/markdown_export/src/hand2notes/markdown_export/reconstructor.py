@@ -162,7 +162,7 @@ def _render_callout(text: str, label: str = "NOTE") -> str:
     lines = _lines_clean(text)
     if not lines:
         return ""
-    body = f"> [!{label}]\n> " + f"\n> ".join(lines)
+    body = f"> [!{label}]\n> " + "\n> ".join(lines)
     return body
 
 
@@ -226,7 +226,12 @@ def _block_to_markdown(block: Block) -> str:
         return f"<{url}>"
     if bt == BlockType.FORMULA:
         return f"$${text.strip()}$$"
-    if bt in (BlockType.DIAGRAM, BlockType.TABLE):
+    if bt == BlockType.DIAGRAM:
+        # VLM-emitted diagrams arrive as a fenced code block (```mermaid …```),
+        # which Obsidian renders natively. Emit it verbatim. Geometry-detected
+        # DiagramBlocks (image crops) are handled by the renderer, not here.
+        return text if text.lstrip().startswith("```") else ""
+    if bt == BlockType.TABLE:
         return ""
     # PARAGRAPH and everything else
     return _render_paragraph(text)

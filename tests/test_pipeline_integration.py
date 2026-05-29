@@ -4,9 +4,7 @@ Requires a sample image in samples/ directory. Skipped if no sample is available
 """
 
 import asyncio
-import os
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 
@@ -17,10 +15,8 @@ SAMPLE_IMAGES = [f for f in SAMPLES_DIR.iterdir() if f.suffix.lower() in {".jpg"
 @pytest.mark.skipif(not SAMPLE_IMAGES, reason="No sample images in samples/ directory")
 def test_pipeline_end_to_end(tmp_path):
     """Full pipeline from image import to vault export."""
-    from hand2notes.core_models.enums import SessionStatus
-    from hand2notes.core_models.models import VaultConfig
+    from hand2notes.core_models.models import Session, VaultConfig
     from hand2notes.ingestion.importer import import_images
-    from hand2notes.core_models.models import Session
 
     sample_image = SAMPLE_IMAGES[0]
 

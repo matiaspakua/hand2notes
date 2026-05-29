@@ -14,10 +14,10 @@ from pathlib import Path
 import numpy as np
 from hand2notes.core_models.models import Block, Page
 
-from .surya_ocr_adapter import OcrLine, run_ocr_on_image, _SURYA_OCR_AVAILABLE
+from .paddle_adapter import run_ocr as _paddle_ocr
+from .surya_ocr_adapter import _SURYA_OCR_AVAILABLE, OcrLine, run_ocr_on_image
 from .trocr_adapter import _TROCR_AVAILABLE
 from .trocr_adapter import run_ocr as _trocr_ocr
-from .paddle_adapter import run_ocr as _paddle_ocr
 
 log = logging.getLogger(__name__)
 
@@ -141,9 +141,9 @@ def run_ocr_on_page(
 
     # --- Primary path 2: gemma4 via Ollama (fallback VLM) ---
     try:
+        from .vlm_blocks_parser import parse_markdown_to_blocks as _parse_blocks
         from .vlm_transcriber import is_available as _vlm_available
         from .vlm_transcriber import transcribe_page as _vlm_transcribe
-        from .vlm_blocks_parser import parse_markdown_to_blocks as _parse_blocks
 
         model = vlm_model or "gemma4:e4b"
         if _vlm_available(model=model):

@@ -1,15 +1,24 @@
 """Qwen2.5-VL transcriber via Ollama — primary VLM for handwriting recognition.
 
-Qwen2.5-VL is purpose-built for document understanding and outperforms gemma4
-on handwritten multilingual content. Preferred over gemma4 when available.
+Qwen2.5-VL is purpose-built for document understanding and outperforms gemma4 on
+handwritten multilingual content. Preferred over gemma4 when available.
 
-Falls back gracefully when the model is not installed.
+This module is a thin orchestrator: prompts, Mermaid sanitising, text cleanup and the
+transcription cache live in the ``vlm`` subpackage so each concern stays small and
+testable. Transcription is two-pass — a reliable text pass plus a focused, best-effort
+diagram pass — with an on-disk cache so repeated runs return in milliseconds.
 """
 
+from __future__ import annotations
+
 import base64
+import io
 import logging
-import re
 from pathlib import Path
+
+from .vlm import cache, mermaid
+from .vlm.prompts import DIAGRAM_PROMPT, TRANSCRIPTION_PROMPT
+from .vlm.text_cleanup import collapse_repetitions, post_process
 
 log = logging.getLogger(__name__)
 
@@ -17,62 +26,30 @@ _DEFAULT_BASE_URL = "http://localhost:11434"
 _MODEL_NAMES = ["qwen2.5vl:7b", "qwen2.5-vl:7b", "qwen2.5vl:latest", "qwen2.5-vl:latest"]
 _TIMEOUT = 180.0
 
-_TRANSCRIPTION_PROMPT = (
-    "You are an expert OCR system for handwritten university notes.\n\n"
-    "Carefully read EVERY word in the image and transcribe it as structured Markdown.\n"
-    "The page is written in Spanish. Preserve all Spanish characters exactly.\n\n"
-    "STRUCTURE RULES:\n"
-    "- The main titles at the top (underlined or highlighted) → use `# Title` (one `#` per title line)\n"
-    "- Section labels like `1)` or `2)` → keep as plain text, never use `##` headings\n"
-    "- After a section label, preserve any connector block on the next lines unchanged\n"
-    "- Arrows: write as `-->` or `--->` (NEVER Unicode → or LaTeX \\rightarrow)\n"
-    "- A vertical bar `|` used as a connector → stays on its own line with the same indentation\n\n"
-    "TABLE RULES (for any grid/table visible in the image):\n"
-    "- Use standard Markdown: `| col1 | col2 | col3 |`\n"
-    "- Separator row uses only dashes: `| --- | --- | --- |`\n"
-    "- Empty cells: `|  |`\n\n"
-    "LIST RULES:\n"
-    "- Numbered items: `N . text` format (digit SPACE dot SPACE text)\n"
-    "- Bulleted items: `- text`\n\n"
-    "SPATIAL LAYOUT:\n"
-    "- Preserve indented/hierarchical connector trees using tabs\n"
-    "- When two columns of text appear side by side at the bottom, preserve spacing\n\n"
-    "IGNORE: dates, page numbers, and timestamps in margins/corners.\n\n"
-    "Output raw Markdown ONLY. No code fences, no explanation, no preamble."
-)
+# Generation options. ``num_ctx`` MUST be bounded: Qwen2.5-VL's native context is 128k,
+# and leaving it unbounded makes Ollama allocate a ~35 GiB compute graph that segfaults
+# the runner. 8192 fits a full page's vision + text tokens with a small, fast kv-cache.
+# ``num_predict`` caps runaway generation — a page needs < 1024 tokens.
+_NUM_CTX = 8192
+_NUM_PREDICT = 1024
+_OPTIONS = {
+    "temperature": 0.0,
+    "num_ctx": _NUM_CTX,
+    "num_predict": _NUM_PREDICT,
+}
 
-_ARROW_FIX = [
-    (re.compile(r"\$\\rightarrow\$"), "-->"),
-    (re.compile(r"\\rightarrow"), "-->"),
-    (re.compile(r"→"), "-->"),
-    (re.compile(r"←"), "<--"),
-    (re.compile(r"-→"), "-->"),
-]
-
-_NUMBERED_REFORMAT = re.compile(r"^(\d+)\.\s+", re.MULTILINE)
-
-_HALLUCINATION_PATTERNS = [
-    (re.compile(r"\bLa como se desdel\b\s*"), ""),
-    (re.compile(r"\bLa cómo se\b\s*"), ""),
-    (re.compile(r"\bdesdel\b"), "desde"),
-]
-
-
-def _post_process(text: str) -> str:
-    for pattern, replacement in _ARROW_FIX:
-        text = pattern.sub(replacement, text)
-    text = re.sub(r"^```[a-z]*\n?", "", text, flags=re.MULTILINE)
-    text = re.sub(r"\n?```$", "", text, flags=re.MULTILINE)
-    for pattern, replacement in _HALLUCINATION_PATTERNS:
-        text = pattern.sub(replacement, text)
-    text = _NUMBERED_REFORMAT.sub(lambda m: f"{m.group(1)} . ", text)
-    return text.strip()
+# Images are downscaled to this longest edge before being sent to Ollama. 1280px is the
+# sweet spot: above it the vision-token count balloons AND the model tends to over-
+# generate / loop, while quality plateaus. At 1280px transcription is concise and fast
+# (~4s warm) with the same word-recall (~87%).
+_MAX_IMAGE_EDGE = 1280
 
 
 def _find_model(base_url: str) -> str | None:
     """Return the first available Qwen2.5-VL model name, or None."""
     try:
         import httpx
+
         r = httpx.get(f"{base_url}/api/tags", timeout=5.0)
         if r.status_code != 200:
             return None
@@ -90,41 +67,125 @@ def is_available(base_url: str = _DEFAULT_BASE_URL) -> bool:
     return _find_model(base_url) is not None
 
 
+def _encode_image(image_path: Path) -> str:
+    """Return base64 JPEG bytes, downscaling oversized images first.
+
+    Guards against the runner-crashing vision-token explosion that occurs when a
+    full-resolution phone photo is sent directly.
+    """
+    raw = image_path.read_bytes()
+    try:
+        from PIL import Image as PILImage
+
+        with PILImage.open(io.BytesIO(raw)) as img:
+            w, h = img.size
+            longest = max(w, h)
+            if longest > _MAX_IMAGE_EDGE:
+                scale = _MAX_IMAGE_EDGE / longest
+                img = img.convert("RGB").resize(
+                    (int(w * scale), int(h * scale)), PILImage.LANCZOS
+                )
+                buf = io.BytesIO()
+                img.save(buf, "JPEG", quality=90)
+                raw = buf.getvalue()
+                log.info(
+                    "Downscaled oversized image %s (%dx%d → longest %d) before VLM send",
+                    image_path.name, w, h, _MAX_IMAGE_EDGE,
+                )
+    except Exception as exc:  # noqa: BLE001 — never block transcription on resize
+        log.debug("Image guard skipped for %s: %s", image_path.name, exc)
+    return base64.b64encode(raw).decode("utf-8")
+
+
+def _chat(model: str, prompt: str, image_b64: str, base_url: str, timeout: float) -> str:
+    import httpx
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt, "images": [image_b64]}],
+        "stream": False,
+        "options": _OPTIONS,
+    }
+    response = httpx.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
+    response.raise_for_status()
+    return response.json().get("message", {}).get("content", "")
+
+
+def _diagram_blocks(model: str, image_b64: str, base_url: str, timeout: float) -> str:
+    """Run the focused diagram pass; return sanitised ```mermaid blocks (or "")."""
+    try:
+        raw = _chat(model, DIAGRAM_PROMPT, image_b64, base_url, timeout)
+    except Exception as exc:  # noqa: BLE001 — diagrams are best-effort; never block text
+        log.warning("Diagram pass failed: %s", exc)
+        return ""
+    if not raw.strip() or raw.strip().upper().startswith("NONE"):
+        return ""
+    cleaned = mermaid.sanitize_mermaid_blocks(mermaid.close_dangling_fence(raw))
+    blocks = mermaid.MERMAID_FENCE_RE.findall(cleaned)
+    return "\n\n".join(f"```mermaid\n{b.strip()}\n```" for b in blocks if b.strip())
+
+
+def _cache_key(image_b64: str, include_diagrams: bool) -> str:
+    import json
+
+    return cache.cache_key(
+        json.dumps(_OPTIONS, sort_keys=True),
+        TRANSCRIPTION_PROMPT,
+        DIAGRAM_PROMPT if include_diagrams else "",
+        image_b64,
+    )
+
+
 def transcribe_page(
     image_path: Path,
     *,
     base_url: str = _DEFAULT_BASE_URL,
     timeout: float = _TIMEOUT,
+    include_diagrams: bool = True,
 ) -> str:
-    import httpx
-
     model = _find_model(base_url)
     if model is None:
         raise RuntimeError("No Qwen2.5-VL model found in Ollama")
 
-    image_b64 = base64.b64encode(image_path.read_bytes()).decode("utf-8")
-    payload = {
-        "model": model,
-        "messages": [
-            {
-                "role": "user",
-                "content": _TRANSCRIPTION_PROMPT,
-                "images": [image_b64],
-            }
-        ],
-        "stream": False,
-        "options": {"temperature": 0.0},
-    }
+    image_b64 = _encode_image(image_path)
 
+    key = _cache_key(image_b64, include_diagrams)
+    cached = cache.cache_get(key)
+    if cached is not None:
+        log.info("VLM cache hit for %s — returning cached transcription", image_path.name)
+        return cached
+
+    # Pass 1: full text transcription (reliable, no diagram instructions).
     try:
-        response = httpx.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
-        response.raise_for_status()
+        raw = _chat(model, TRANSCRIPTION_PROMPT, image_b64, base_url, timeout)
     except Exception as exc:
         raise RuntimeError(f"Qwen2.5-VL transcription failed: {exc}") from exc
-
-    raw = response.json().get("message", {}).get("content", "")
     if not raw.strip():
         raise RuntimeError("Qwen2.5-VL returned empty transcription")
 
-    log.debug("Qwen2.5-VL model=%s raw (%d chars): %s…", model, len(raw), raw[:120])
-    return _post_process(raw)
+    text = post_process(raw)
+
+    # Pass 2: focused diagram extraction, appended after the text. Best-effort.
+    if include_diagrams:
+        diagrams = _diagram_blocks(model, image_b64, base_url, timeout)
+        if diagrams:
+            log.info("Diagram pass produced %d mermaid block(s)", diagrams.count("```mermaid"))
+            text = f"{text}\n\n{diagrams}"
+
+    cache.cache_put(key, text)
+    log.debug("Qwen2.5-VL model=%s text (%d chars)", model, len(text))
+    return text
+
+
+# ── Backward-compatible private aliases (referenced by existing tests) ────────
+_TRANSCRIPTION_PROMPT = TRANSCRIPTION_PROMPT
+_DIAGRAM_PROMPT = DIAGRAM_PROMPT
+_collapse_repetitions = collapse_repetitions
+_post_process = post_process
+_sanitize_mermaid_blocks = mermaid.sanitize_mermaid_blocks
+_unwrap_outer_fence = mermaid.unwrap_outer_fence
+_close_dangling_fence = mermaid.close_dangling_fence
+_cache_dir = cache.cache_dir
+_cache_enabled = cache.cache_enabled
+_cache_get = cache.cache_get
+_cache_put = cache.cache_put

@@ -15,8 +15,7 @@ This runs as a post-OCR step in the pipeline when the layout is too coarse.
 from __future__ import annotations
 
 import re
-from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox

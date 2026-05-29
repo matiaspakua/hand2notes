@@ -14,6 +14,13 @@ export interface BlockOverlay {
   confidence: number;
 }
 
+export interface RunMetrics {
+  totalElapsedS: number;
+  stageCount: number;
+  slowestStage: string | null;
+  slowestStageS: number;
+}
+
 interface PipelineState {
   runId: string | null;
   sessionId: string | null;
@@ -31,11 +38,14 @@ interface PipelineState {
   currentPageHeight: number;
   currentPageBlocks: BlockOverlay[];
 
+  runMetrics: RunMetrics | null;
+
   startRun: (runId: string, sessionId: string) => void;
   setStageStarted: (stage: string) => void;
   setStageCompleted: (stage: string, metrics: Record<string, number>) => void;
   setStageError: (stage: string) => void;
   setError: (error: string) => void;
+  setRunMetrics: (metrics: RunMetrics) => void;
   requestCancel: () => void;
   finishRun: () => void;
   reset: () => void;
@@ -79,6 +89,8 @@ export const usePipelineStore = create<PipelineState>((set) => ({
   currentPageHeight: 0,
   currentPageBlocks: [],
 
+  runMetrics: null,
+
   startRun: (runId, sessionId) =>
     set({
       runId,
@@ -90,6 +102,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       error: null,
       currentPageId: null,
       currentPageBlocks: [],
+      runMetrics: null,
     }),
 
   setStageStarted: (stage) =>
@@ -113,6 +126,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
     })),
 
   setError: (error) => set({ error, isRunning: false }),
+  setRunMetrics: (runMetrics) => set({ runMetrics }),
   requestCancel: () => set({ isCancelling: true }),
   finishRun: () => set({ isRunning: false, progressPercent: 100, isCancelling: false }),
   reset: () =>
@@ -126,6 +140,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       error: null,
       currentPageId: null,
       currentPageBlocks: [],
+      runMetrics: null,
     }),
 
   setPageLayout: (pageId, pageIndex, totalPages, blocks, pageWidth, pageHeight) =>

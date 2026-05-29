@@ -10,8 +10,8 @@ from dataclasses import dataclass
 import numpy as np
 
 try:
-    from paddleocr import PaddleOCR as _PaddleOCR
     import paddle as _paddle  # noqa: F401 — import confirms native lib is present
+    from paddleocr import PaddleOCR as _PaddleOCR
 
     _PADDLE_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):

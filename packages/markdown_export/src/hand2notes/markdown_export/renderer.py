@@ -19,8 +19,7 @@ from hand2notes.core_models.models import Block, Page, Session, VaultConfig
 
 from .content_classifier import apply_overrides, classify_blocks
 from .front_matter import inject_front_matter
-from .reconstructor import _block_to_markdown, _lines_clean, reconstruct
-
+from .reconstructor import _block_to_markdown
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Diagram / Table renderers (unchanged from original)
@@ -154,12 +153,19 @@ def _render_page(
     """Render one page to a Markdown section string."""
 
     # ── Step 1: merge small blocks into logical units ─────────────────────────
-    # Skip the spatial merger when the OCR line_grouper already produced
-    # well-structured blocks (> 5 non-diagram blocks = already fine-grained).
+    # The spatial block merger groups blocks by their bounding-box geometry. It is
+    # only meaningful for Surya/geometry layout blocks that carry real bboxes.
+    # VLM-transcribed blocks all share one synthetic full-page bbox, so the merger
+    # would (wrongly) collapse them into a single truncated block. Detect that case
+    # by the absence of spatial diversity and skip the merger. Also skip when the
+    # line_grouper already produced fine-grained blocks (> 5 non-diagram blocks).
     from hand2notes.core_models.enums import BlockType as _BT
-    _text_block_count = sum(1 for b in page.blocks
-                            if b.block_type not in (_BT.DIAGRAM, _BT.TABLE))
-    if _text_block_count <= 5:
+    _text_blocks = [b for b in page.blocks if b.block_type not in (_BT.DIAGRAM, _BT.TABLE)]
+    _distinct_bboxes = {
+        (b.bbox.x, b.bbox.y, b.bbox.width, b.bbox.height) for b in _text_blocks
+    }
+    _has_spatial_layout = len(_distinct_bboxes) > 1
+    if len(_text_blocks) <= 5 and _has_spatial_layout:
         from hand2notes.layout.block_merger import merge_page_blocks
         merged_blocks = merge_page_blocks(page.blocks, page.width_px, page.height_px)
     else:
@@ -213,9 +219,7 @@ def _render_page(
     result_parts: list[str] = list(header_parts)
     for i, (text, bt) in enumerate(rendered_parts):
         if result_parts and text and not is_markdown_table(text) and \
-                (text.startswith((" ", "\t")) or text.startswith("|")):
-            result_parts[-1] = result_parts[-1] + "\n" + text
-        elif (i > 0 and bt == BlockType.TITLE.value
+                (text.startswith((" ", "\t")) or text.startswith("|")) or (i > 0 and bt == BlockType.TITLE.value
                 and rendered_parts[i - 1][1] == BlockType.TITLE.value):
             result_parts[-1] = result_parts[-1] + "\n" + text
         else:

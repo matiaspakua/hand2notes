@@ -103,10 +103,6 @@ def _group_into_rows(blocks: list[Block], avg_height: float) -> list[list[Block]
             current_row.append(block)
             continue
 
-        # Compare vertical centre of this block against the row's merged centre
-        row_cy = _centre_y(current_row)
-        block_cy = block.bbox.y + block.bbox.height / 2
-
         # y_overlap: is this block's centre within the row's vertical band?
         row_top = min(b.bbox.y for b in current_row)
         row_bot = max(b.bbox.y + b.bbox.height for b in current_row)
@@ -214,7 +210,7 @@ def _merge_paragraph_group(group: list[Block]) -> Block:
         return group[0]
 
     # Dominant block = one with most text
-    dominant = max(group, key=lambda b: len((b.content or "")))
+    dominant = max(group, key=lambda b: len(b.content or ""))
     merged = copy.copy(dominant)
 
     # Encompassing bbox

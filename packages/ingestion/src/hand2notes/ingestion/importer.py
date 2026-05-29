@@ -27,11 +27,11 @@ def _convert_heic_to_jpeg(heic_path: Path) -> Path:
     try:
         from pillow_heif import register_heif_opener
         register_heif_opener()
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "pillow-heif is required to import HEIC files. "
             "Install with: pip install pillow-heif"
-        )
+        ) from err
 
     jpeg_path = heic_path.with_suffix(".jpg")
     with Image.open(heic_path) as img:
