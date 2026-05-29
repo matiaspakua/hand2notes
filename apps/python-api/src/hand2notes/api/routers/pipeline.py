@@ -22,8 +22,14 @@ router = APIRouter(prefix="/sessions", tags=["pipeline"])
 
 # Active pipeline runs: session_id → (asyncio.Task, asyncio.Event for cancel)
 _active_runs: dict[UUID, tuple[asyncio.Task, asyncio.Event]] = {}
-# Progress queues: session_id → list of WebSocket connections
+# Progress queues: session_id → list of live WebSocket queues
 _progress_queues: dict[UUID, list[asyncio.Queue]] = {}
+# Per-run event history so a WebSocket that connects after the run has started
+# (or already finished — common now that cached conversions complete in ~1s) is
+# replayed every event, including run_completed. Without this, a fast run can emit
+# all its events before any client subscribes and the UI would hang forever.
+_progress_history: dict[UUID, list[dict]] = {}
+_MAX_HISTORY = 1000
 
 
 def _default_config() -> VaultConfig:
@@ -68,6 +74,7 @@ async def start_processing(session_id: UUID) -> ProcessResponse:
     config = _default_config()
     cancel_event = asyncio.Event()
     run_id = str(session.id) + "-run"
+    _progress_history[session_id] = []  # fresh event history for this run
 
     log.info(
         "Pipeline run starting: session=%s run_id=%s page_count=%d vault_root=%s",
@@ -75,8 +82,11 @@ async def start_processing(session_id: UUID) -> ProcessResponse:
     )
 
     def on_progress(event: dict[str, Any]) -> None:
-        queues = _progress_queues.get(session_id, [])
-        for q in queues:
+        history = _progress_history.setdefault(session_id, [])
+        history.append(event)
+        if len(history) > _MAX_HISTORY:
+            del history[: len(history) - _MAX_HISTORY]
+        for q in _progress_queues.get(session_id, []):
             q.put_nowait(event)
 
     async def _run() -> None:
@@ -148,6 +158,12 @@ async def progress_websocket(websocket: WebSocket, session_id: UUID) -> None:
     _progress_queues.setdefault(session_id, []).append(queue)
 
     try:
+        # Replay events already emitted before this client subscribed (a fast/cached
+        # run may have finished before the WebSocket connected). Snapshot first so
+        # live events appended during replay are delivered once, via the queue.
+        for event in list(_progress_history.get(session_id, [])):
+            await websocket.send_text(json.dumps(event))
+
         while True:
             event = await queue.get()
             if event.get("event") == "__done__":

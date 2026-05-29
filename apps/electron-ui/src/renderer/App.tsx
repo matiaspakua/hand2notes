@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './services/api';
 import { ImportPage } from './pages/ImportPage';
 import { ProcessingPage } from './pages/ProcessingPage';
+import { usePipelineStore } from './stores/pipelineStore';
 
 type Screen = 'loading' | 'import' | 'processing' | 'done' | 'error';
 
@@ -69,7 +70,11 @@ export function App() {
           <p>Your notes have been written to the Obsidian vault.</p>
           <button
             style={{ marginTop: '1rem', padding: '0.5rem 1.2rem', cursor: 'pointer' }}
-            onClick={() => { setActiveSessionId(null); setScreen('import'); }}
+            onClick={() => {
+              usePipelineStore.getState().reset();
+              setActiveSessionId(null);
+              setScreen('import');
+            }}
           >
             Process another session
           </button>
