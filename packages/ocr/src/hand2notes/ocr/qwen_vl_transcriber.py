@@ -31,7 +31,7 @@ _TIMEOUT = 180.0
 # the runner. 8192 fits a full page's vision + text tokens with a small, fast kv-cache.
 # ``num_predict`` caps runaway generation — a page needs < 1024 tokens.
 _NUM_CTX = 8192
-_NUM_PREDICT = 1024
+_NUM_PREDICT = 2048
 _OPTIONS = {
     "temperature": 0.0,
     "num_ctx": _NUM_CTX,

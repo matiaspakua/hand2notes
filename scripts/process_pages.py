@@ -48,7 +48,7 @@ async def process_one(image: Path, idx: int) -> tuple[str, float]:
         vault_root=vault_root,
         folder_template="{{notebook}}/page-{{topic}}",
         vlm_transcription_enabled=True,
-        spell_correction_enabled=False,
+        spell_correction_enabled=True,
     )
 
     t0 = time.time()

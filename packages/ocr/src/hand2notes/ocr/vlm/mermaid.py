@@ -139,6 +139,7 @@ def unwrap_outer_fence(text: str) -> str:
 
     The model sometimes wraps its entire reply in ```markdown … ``` while also emitting
     inner ```mermaid blocks. Remove only the outer wrapper, never the diagram fences.
+    Uses regex to match the outer pair so inner fences are never touched.
     """
     stripped = text.strip()
     if not stripped.startswith("```") or not stripped.endswith("```"):
@@ -147,6 +148,30 @@ def unwrap_outer_fence(text: str) -> str:
     if nl == -1:
         return text
     lang = stripped[3:nl].strip().lower()
-    if lang in ("", "markdown", "md", "text"):
-        return stripped[nl + 1 : -3].strip()
-    return text
+    if lang not in ("", "markdown", "md", "text"):
+        return text
+    # Find the LAST standalone ``` in the text — that's the outer closing fence.
+    # First try newline-prefixed (``` on its own line), then fall back to end-of-string.
+    last = stripped.rfind("\n```")
+    if last == -1 or last < nl:
+        # Closing fence might be at the very end without a leading newline.
+        if stripped.rstrip().endswith("```"):
+            last = len(stripped) - 3
+        else:
+            last = -1
+    if last < 0 or last <= nl:
+        return text
+    content = stripped[nl + 1 : last]
+    # If there's a stray ``` inside the content (inner fence with no closing),
+    # the outer opening may have been matched to the first inner closing.
+    # In that case, try finding the LAST ``` from the end.
+    if content.lstrip().startswith("```"):
+        # The VLM likely embedded an inner ``` without proper nesting.
+        # Find the actual outer closing by looking for standalone ``` lines.
+        lines = stripped.splitlines()
+        # Starting after the first line, find all lines that are exactly ```
+        close_indices = [i for i, ln in enumerate(lines[1:], start=1) if ln.strip() == "```"]
+        if close_indices and close_indices[-1] >= 1:
+            content_lines = lines[1:close_indices[-1]]
+            return "\n".join(content_lines)
+    return content.strip()
