@@ -14,12 +14,21 @@ from hand2notes.core_models.enums import BlockType
 from hand2notes.core_models.models import Block, BoundingBox, Page
 
 try:
-    from surya.foundation import FoundationPredictor as _FoundationPredictor
     from surya.layout import LayoutPredictor as _LayoutPredictor
 
     _SURYA_AVAILABLE = True
 except ImportError:
     _SURYA_AVAILABLE = False
+
+
+_predictor: "_LayoutPredictor | None" = None
+
+
+def _get_predictor() -> "_LayoutPredictor":
+    global _predictor
+    if _predictor is None:
+        _predictor = _LayoutPredictor()
+    return _predictor
 
 # Surya ≥0.10 label map (ID_TO_LABEL values)
 _BLOCK_TYPE_MAP: dict[str, BlockType] = {
@@ -73,8 +82,7 @@ def detect_layout(image_path: Path, page: Page) -> list[Block]:
 def _detect_with_surya(image_path: Path, page: Page) -> list[Block]:
     from PIL import Image as PILImage
 
-    foundation = _FoundationPredictor()
-    predictor = _LayoutPredictor(foundation)
+    predictor = _get_predictor()
     pil_image = PILImage.open(image_path).convert("RGB")
     results = predictor([pil_image])
 

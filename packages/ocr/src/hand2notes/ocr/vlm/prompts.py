@@ -38,8 +38,11 @@ TRANSCRIPTION_PROMPT = (
 )
 
 DIAGRAM_PROMPT = (
-    "Look only at the hand-drawn DIAGRAMS on this page: shapes (boxes, ellipses, circles,\n"
-    "clouds) connected by drawn ARROWS — flowcharts, trees, process/block diagrams.\n\n"
+    "Look only at the hand-drawn DIAGRAMS on this page: hand-drawn shapes (boxes, ellipses, circles,\n"
+    "clouds) connected by hand-drawn ARROWS — flowcharts, trees, process/block diagrams.\n\n"
+    "CRITICAL: Text connectors like `-->` or `|` that are part of the TEXT content (not hand-drawn)\n"
+    "are NOT diagrams. Text tables, lists, and indentation trees are NOT diagrams.\n"
+    "Only hand-drawn shapes connected by hand-drawn arrows qualify.\n\n"
     "For EACH such diagram, output one Mermaid flowchart code block:\n"
     "```mermaid\n"
     "flowchart TD\n"
