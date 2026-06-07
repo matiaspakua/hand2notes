@@ -15,6 +15,19 @@ except ImportError:
     _SURYA_AVAILABLE = False
 
 
+_model = None
+_processor = None
+
+
+def _get_models():
+    global _model, _processor
+    if _model is None:
+        _model = load_model()
+    if _processor is None:
+        _processor = load_processor()
+    return _model, _processor
+
+
 def assign_reading_order(blocks: list[Block], image_width: int, image_height: int) -> list[Block]:
     """Return blocks with reading_order indices set.
 
@@ -29,8 +42,7 @@ def assign_reading_order(blocks: list[Block], image_width: int, image_height: in
 def _order_with_surya(blocks: list[Block], image_width: int, image_height: int) -> list[Block]:
     from PIL import Image as PILImage
 
-    model = load_model()
-    processor = load_processor()
+    model, processor = _get_models()
 
     # Build bbox list in [x1, y1, x2, y2] format expected by Surya
     bboxes = [
